@@ -577,7 +577,7 @@ public class ExcelUtil<T>
      * @param title 标题
      * @return 结果
      */
-    public void exportExcel(HttpServletResponse response, List<T> list, String sheetName, String title)
+    public void  exportExcel(HttpServletResponse response, List<T> list, String sheetName, String title)
     {
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");

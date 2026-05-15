@@ -14,7 +14,7 @@ import com.ruoyi.common.core.domain.BaseEntity;
  * 
  * @author ruoyi
  */
-public class SysPost extends BaseEntity
+public class    SysPost extends BaseEntity
 {
     private static final long serialVersionUID = 1L;
 

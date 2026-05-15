@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysTeacherMapper">
+    
+    <resultMap type="SysTeacher" id="SysTeacherResult">
+        <result property="teacherId"    column="teacher_id"    />
+        <result property="teacherName"    column="teacher_name"    />
+        <result property="gender"    column="gender"    />
+        <result property="phone"    column="phone"    />
+        <result property="subject"    column="subject"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectSysTeacherVo">
+        select teacher_id, teacher_name, gender, phone, subject, create_by, create_time, update_by, update_time, remark from sys_teacher
+    </sql>
+
+    <select id="selectSysTeacherList" parameterType="SysTeacher" resultMap="SysTeacherResult">
+        <include refid="selectSysTeacherVo"/>
+        <where>  
+            <if test="teacherName != null  and teacherName != ''"> and teacher_name like concat('%', #{teacherName}, '%')</if>
+            <if test="gender != null  and gender != ''"> and gender = #{gender}</if>
+            <if test="phone != null  and phone != ''"> and phone = #{phone}</if>
+            <if test="subject != null  and subject != ''"> and subject = #{subject}</if>
+        </where>
+    </select>
+    
+    <select id="selectSysTeacherByTeacherId" parameterType="Long" resultMap="SysTeacherResult">
+        <include refid="selectSysTeacherVo"/>
+        where teacher_id = #{teacherId}
+    </select>
+
+    <insert id="insertSysTeacher" parameterType="SysTeacher" useGeneratedKeys="true" keyProperty="teacherId">
+        insert into sys_teacher
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="teacherName != null and teacherName != ''">teacher_name,</if>
+            <if test="gender != null and gender != ''">gender,</if>
+            <if test="phone != null">phone,</if>
+            <if test="subject != null">subject,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="remark != null">remark,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="teacherName != null and teacherName != ''">#{teacherName},</if>
+            <if test="gender != null and gender != ''">#{gender},</if>
+            <if test="phone != null">#{phone},</if>
+            <if test="subject != null">#{subject},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="remark != null">#{remark},</if>
+         </trim>
+    </insert>
+
+    <update id="updateSysTeacher" parameterType="SysTeacher">
+        update sys_teacher
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="teacherName != null and teacherName != ''">teacher_name = #{teacherName},</if>
+            <if test="gender != null and gender != ''">gender = #{gender},</if>
+            <if test="phone != null">phone = #{phone},</if>
+            <if test="subject != null">subject = #{subject},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </trim>
+        where teacher_id = #{teacherId}
+    </update>
+
+    <delete id="deleteSysTeacherByTeacherId" parameterType="Long">
+        delete from sys_teacher where teacher_id = #{teacherId}
+    </delete>
+
+    <delete id="deleteSysTeacherByTeacherIds" parameterType="String">
+        delete from sys_teacher where teacher_id in 
+        <foreach item="teacherId" collection="array" open="(" separator="," close=")">
+            #{teacherId}
+        </foreach>
+    </delete>
+</mapper>

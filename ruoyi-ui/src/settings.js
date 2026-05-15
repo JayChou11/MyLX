@@ -1,8 +1,8 @@
-module.exports = {
+export default {
   /**
    * 网页标题
    */
-  title: process.env.VUE_APP_TITLE,
+  title: import.meta.env.VITE_APP_TITLE,
 
   /**
    * 侧边栏主题 深色主题theme-dark，浅色主题theme-light
@@ -10,7 +10,7 @@ module.exports = {
   sideTheme: 'theme-dark',
 
   /**
-   * 系统布局配置
+   * 是否系统布局配置
    */
   showSettings: true,
 
@@ -33,6 +33,11 @@ module.exports = {
    * 显示页签图标
    */
   tagsIcon: false,
+
+  /**
+   * 标签页样式：card 卡片（默认）、chrome 谷歌浏览器风格
+   */
+  tagsViewStyle: 'card',
 
   /**
    * 是否固定头部
@@ -59,3 +64,4 @@ module.exports = {
    */
   footerContent: 'Copyright © 2018-2026 RuoYi. All Rights Reserved.'
 }
+

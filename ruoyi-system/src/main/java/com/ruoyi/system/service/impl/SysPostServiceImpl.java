@@ -38,8 +38,7 @@ public class SysPostServiceImpl implements ISysPostService
     }
 
     /**
-     * 查询所有岗位
-     * 
+     *
      * @return 岗位列表
      */
     @Override
