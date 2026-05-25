@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysClassMapper">
+
+    <resultMap type="SysClass" id="SysClassResult">
+        <id     property="classId"       column="class_id"       />
+        <result property="className"     column="class_name"     />
+        <result property="grade"         column="grade"          />
+        <result property="teacherName"   column="teacher_name"   />
+        <result property="classroom"     column="classroom"      />
+        <result property="maxCount"      column="max_count"      />
+        <result property="createBy"      column="create_by"      />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"      column="update_by"      />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"        column="remark"         />
+    </resultMap>
+
+    <sql id="selectClassVo">
+        select class_id, class_name, grade, teacher_name, classroom, max_count,
+               create_by, create_time, update_by, update_time, remark
+        from sys_class
+    </sql>
+
+    <select id="selectClassByClassId" parameterType="Long" resultMap="SysClassResult">
+        <include refid="selectClassVo"/>
+        where class_id = #{classId}
+    </select>
+
+    <select id="selectClassList" parameterType="SysClass" resultMap="SysClassResult">
+        <include refid="selectClassVo"/>
+        <where>
+            <if test="className != null and className != ''">
+                and class_name like concat('%', #{className}, '%')
+            </if>
+            <if test="grade != null and grade != ''">
+                and grade like concat('%', #{grade}, '%')
+            </if>
+            <if test="teacherName != null and teacherName != ''">
+                and teacher_name like concat('%', #{teacherName}, '%')
+            </if>
+            <if test="classroom != null and classroom != ''">
+                and classroom like concat('%', #{classroom}, '%')
+            </if>
+        </where>
+        order by grade asc, class_id asc
+    </select>
+
+    <select id="selectClassByGradeAndName" parameterType="SysClass" resultMap="SysClassResult">
+        <include refid="selectClassVo"/>
+        where grade = #{grade} and class_name = #{className}
+        limit 1
+    </select>
+
+    <select id="countStudentByClassId" parameterType="Long" resultType="int">
+        select count(1) from sys_student where class_id = #{classId}
+    </select>
+
+    <insert id="insertClass" parameterType="SysClass" useGeneratedKeys="true" keyProperty="classId">
+        insert into sys_class(
+            <if test="className != null and className != ''">class_name,</if>
+            <if test="grade != null and grade != ''">grade,</if>
+            <if test="teacherName != null and teacherName != ''">teacher_name,</if>
+            <if test="classroom != null and classroom != ''">classroom,</if>
+            <if test="maxCount != null">max_count,</if>
+            <if test="remark != null and remark != ''">remark,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            create_time
+        ) values (
+            <if test="className != null and className != ''">#{className},</if>
+            <if test="grade != null and grade != ''">#{grade},</if>
+            <if test="teacherName != null and teacherName != ''">#{teacherName},</if>
+            <if test="classroom != null and classroom != ''">#{classroom},</if>
+            <if test="maxCount != null">#{maxCount},</if>
+            <if test="remark != null and remark != ''">#{remark},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            sysdate()
+        )
+    </insert>
+
+    <update id="updateClass" parameterType="SysClass">
+        update sys_class
+        <set>
+            <if test="className != null and className != ''">class_name = #{className},</if>
+            <if test="grade != null and grade != ''">grade = #{grade},</if>
+            <if test="teacherName != null">teacher_name = #{teacherName},</if>
+            <if test="classroom != null">classroom = #{classroom},</if>
+            <if test="maxCount != null">max_count = #{maxCount},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </set>
+        where class_id = #{classId}
+    </update>
+
+    <delete id="deleteClassByClassId" parameterType="Long">
+        delete from sys_class where class_id = #{classId}
+    </delete>
+
+    <delete id="deleteClassByClassIds" parameterType="Long">
+        delete from sys_class where class_id in
+        <foreach item="classId" collection="array" open="(" separator="," close=")">
+            #{classId}
+        </foreach>
+    </delete>
+
+</mapper>

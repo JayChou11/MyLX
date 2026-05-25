@@ -11,8 +11,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="idCard"      column="id_card"      />
         <result property="age"         column="age"          />
         <result property="gender"      column="gender"       />
+        <result property="classId"     column="class_id"     />
         <result property="grade"       column="grade"        />
         <result property="className"   column="class_name"   />
+        <result property="photo"       column="photo"        />
         <result property="createBy"    column="create_by"    />
         <result property="createTime"  column="create_time"  />
         <result property="updateBy"    column="update_by"    />
@@ -21,65 +23,98 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectStudentVo">
-        select student_id, student_no, student_name, id_card, age, gender, grade, class_name,
-               create_by, create_time, update_by, update_time, remark
-        from sys_student
+        select s.student_id, s.student_no, s.student_name, s.id_card, s.age, s.gender,
+               s.class_id, c.grade, c.class_name, s.photo,
+               s.create_by, s.create_time, s.update_by, s.update_time, s.remark
+        from sys_student s
+        left join sys_class c on s.class_id = c.class_id
     </sql>
 
     <select id="selectStudentByStudentId" parameterType="Long" resultMap="SysStudentResult">
         <include refid="selectStudentVo"/>
-        where student_id = #{studentId}
+        where s.student_id = #{studentId}
     </select>
 
     <select id="selectStudentList" parameterType="SysStudent" resultMap="SysStudentResult">
         <include refid="selectStudentVo"/>
         <where>
             <if test="studentNo != null and studentNo != ''">
-                and student_no like concat('%', #{studentNo}, '%')
+                and s.student_no like concat('%', #{studentNo}, '%')
             </if>
             <if test="studentName != null and studentName != ''">
-                and student_name like concat('%', #{studentName}, '%')
+                and s.student_name like concat('%', #{studentName}, '%')
             </if>
             <if test="idCard != null and idCard != ''">
-                and id_card like concat('%', #{idCard}, '%')
+                and s.id_card like concat('%', #{idCard}, '%')
             </if>
             <if test="gender != null and gender != ''">
-                and gender = #{gender}
+                and s.gender = #{gender}
+            </if>
+            <if test="classId != null">
+                and s.class_id = #{classId}
             </if>
             <if test="grade != null and grade != ''">
-                and grade like concat('%', #{grade}, '%')
+                and c.grade like concat('%', #{grade}, '%')
             </if>
             <if test="className != null and className != ''">
-                and class_name like concat('%', #{className}, '%')
+                and c.class_name like concat('%', #{className}, '%')
             </if>
             <if test="params.beginTime != null and params.beginTime != ''">
-                and date_format(create_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+                and date_format(s.create_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
             </if>
             <if test="params.endTime != null and params.endTime != ''">
-                and date_format(create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+                and date_format(s.create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
             </if>
         </where>
-        order by student_id desc
+        order by s.student_id desc
     </select>
 
     <select id="selectStudentListByIds" resultMap="SysStudentResult">
         <include refid="selectStudentVo"/>
-        where student_id in
+        where s.student_id in
         <foreach item="studentId" collection="array" open="(" separator="," close=")">
             #{studentId}
         </foreach>
-        order by student_id desc
+        order by s.student_id desc
     </select>
+
+    <select id="selectStudentClassStatList" resultType="com.ruoyi.system.domain.vo.SysStudentClassStat">
+        select c.grade,
+               c.class_name as className,
+               c.class_id as classId,
+               count(1) as studentCount,
+               sum(case when s.gender = '0' then 1 else 0 end) as maleCount,
+               sum(case when s.gender = '1' then 1 else 0 end) as femaleCount,
+               sum(case when s.gender = '2' then 1 else 0 end) as unknownCount
+        from sys_student s
+        left join sys_class c on s.class_id = c.class_id
+        group by c.grade, c.class_name, c.class_id
+        order by c.grade asc, c.class_name asc
+    </select>
+
+    <update id="transferStudentClass" parameterType="com.ruoyi.system.domain.vo.SysStudentTransferDto">
+        update sys_student
+        set class_id = #{classId},
+            <if test="remark != null and remark != ''">
+                remark = #{remark},
+            </if>
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where student_id in
+        <foreach item="studentId" collection="studentIds" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+    </update>
 
     <select id="selectStudentByStudentNo" parameterType="String" resultMap="SysStudentResult">
         <include refid="selectStudentVo"/>
-        where student_no = #{studentNo}
+        where s.student_no = #{studentNo}
         limit 1
     </select>
 
     <select id="selectStudentByIdCard" parameterType="String" resultMap="SysStudentResult">
         <include refid="selectStudentVo"/>
-        where id_card = #{idCard}
+        where s.id_card = #{idCard}
         limit 1
     </select>
 
@@ -90,8 +125,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="idCard != null and idCard != ''">id_card,</if>
             <if test="age != null">age,</if>
             <if test="gender != null and gender != ''">gender,</if>
-            <if test="grade != null and grade != ''">grade,</if>
-            <if test="className != null and className != ''">class_name,</if>
+            <if test="classId != null">class_id,</if>
+            <if test="photo != null and photo != ''">photo,</if>
             <if test="remark != null and remark != ''">remark,</if>
             <if test="createBy != null and createBy != ''">create_by,</if>
             create_time
@@ -101,8 +136,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="idCard != null and idCard != ''">#{idCard},</if>
             <if test="age != null">#{age},</if>
             <if test="gender != null and gender != ''">#{gender},</if>
-            <if test="grade != null and grade != ''">#{grade},</if>
-            <if test="className != null and className != ''">#{className},</if>
+            <if test="classId != null">#{classId},</if>
+            <if test="photo != null and photo != ''">#{photo},</if>
             <if test="remark != null and remark != ''">#{remark},</if>
             <if test="createBy != null and createBy != ''">#{createBy},</if>
             sysdate()
@@ -117,8 +152,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="idCard != null and idCard != ''">id_card = #{idCard},</if>
             <if test="age != null">age = #{age},</if>
             <if test="gender != null and gender != ''">gender = #{gender},</if>
-            <if test="grade != null and grade != ''">grade = #{grade},</if>
-            <if test="className != null and className != ''">class_name = #{className},</if>
+            <if test="classId != null">class_id = #{classId},</if>
+            <if test="photo != null">photo = #{photo},</if>
             <if test="remark != null">remark = #{remark},</if>
             <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
             update_time = sysdate()

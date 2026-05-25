@@ -44,13 +44,20 @@ public class SysStudent extends BaseEntity
     @Excel(name = "性别", dictType = "sys_user_sex", comboReadDict = true)
     private String gender;
 
-    /** 年级 */
+    /** 班级ID */
+    @Excel(name = "班级ID")
+    private Long classId;
+
+    /** 年级（关联查询时填充，非数据库字段） */
     @Excel(name = "年级")
     private String grade;
 
-    /** 班级 */
+    /** 班级名称（关联查询时填充，非数据库字段） */
     @Excel(name = "班级")
     private String className;
+
+    /** 学生照片 */
+    private String photo;
 
     public Long getStudentId()
     {
@@ -126,9 +133,17 @@ public class SysStudent extends BaseEntity
         this.gender = gender;
     }
 
-    @Xss(message = "年级不能包含脚本字符")
-    @NotBlank(message = "年级不能为空")
-    @Size(max = 20, message = "年级长度不能超过20个字符")
+    @NotNull(message = "班级不能为空")
+    public Long getClassId()
+    {
+        return classId;
+    }
+
+    public void setClassId(Long classId)
+    {
+        this.classId = classId;
+    }
+
     public String getGrade()
     {
         return grade;
@@ -139,9 +154,6 @@ public class SysStudent extends BaseEntity
         this.grade = grade;
     }
 
-    @Xss(message = "班级不能包含脚本字符")
-    @NotBlank(message = "班级不能为空")
-    @Size(max = 30, message = "班级长度不能超过30个字符")
     public String getClassName()
     {
         return className;
@@ -150,6 +162,17 @@ public class SysStudent extends BaseEntity
     public void setClassName(String className)
     {
         this.className = className;
+    }
+
+    @Size(max = 500, message = "学生照片地址长度不能超过500个字符")
+    public String getPhoto()
+    {
+        return photo;
+    }
+
+    public void setPhoto(String photo)
+    {
+        this.photo = photo;
     }
 
     @Override
@@ -162,8 +185,10 @@ public class SysStudent extends BaseEntity
             .append("idCard", getIdCard())
             .append("age", getAge())
             .append("gender", getGender())
+            .append("classId", getClassId())
             .append("grade", getGrade())
             .append("className", getClassName())
+            .append("photo", getPhoto())
             .append("createBy", getCreateBy())
             .append("createTime", getCreateTime())
             .append("updateBy", getUpdateBy())

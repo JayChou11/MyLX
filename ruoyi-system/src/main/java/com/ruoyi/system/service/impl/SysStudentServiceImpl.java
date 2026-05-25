@@ -1,21 +1,31 @@
 package com.ruoyi.system.service.impl;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
+import com.ruoyi.common.utils.DateUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.bean.BeanValidators;
+import com.ruoyi.system.domain.SysClass;
 import com.ruoyi.system.domain.SysStudent;
+import com.ruoyi.system.domain.SysStudentTransferLog;
+import com.ruoyi.system.domain.vo.SysStudentClassStat;
+import com.ruoyi.system.domain.vo.SysStudentTransferDto;
+import com.ruoyi.system.mapper.SysClassMapper;
 import com.ruoyi.system.mapper.SysStudentMapper;
 import com.ruoyi.system.service.ISysStudentService;
+import com.ruoyi.system.service.ISysStudentTransferLogService;
 
 /**
  * 学生信息Service业务层处理
- * 
+ *
  * @author ruoyi
  */
 @Service
@@ -27,11 +37,17 @@ public class SysStudentServiceImpl implements ISysStudentService
     private SysStudentMapper studentMapper;
 
     @Autowired
+    private SysClassMapper classMapper;
+
+    @Autowired
+    private ISysStudentTransferLogService transferLogService;
+
+    @Autowired
     protected Validator validator;
 
     /**
      * 查询学生信息
-     * 
+     *
      * @param studentId 学生信息主键
      * @return 学生信息
      */
@@ -43,7 +59,7 @@ public class SysStudentServiceImpl implements ISysStudentService
 
     /**
      * 查询学生信息列表
-     * 
+     *
      * @param student 学生信息
      * @return 学生信息
      */
@@ -66,8 +82,53 @@ public class SysStudentServiceImpl implements ISysStudentService
     }
 
     /**
+     * 查询学生班级统计
+     *
+     * @return 学生班级统计集合
+     */
+    @Override
+    public List<SysStudentClassStat> selectStudentClassStatList()
+    {
+        return studentMapper.selectStudentClassStatList();
+    }
+
+    /**
+     * 批量调班
+     *
+     * @param transferDto 调班参数
+     * @return 结果
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int transferStudentClass(SysStudentTransferDto transferDto)
+    {
+        if (transferDto.getStudentIds() == null || transferDto.getStudentIds().length == 0)
+        {
+            throw new ServiceException("请选择需要调班的学生");
+        }
+        // 校验目标班级是否存在
+        SysClass targetClass = classMapper.selectClassByClassId(transferDto.getClassId());
+        if (targetClass == null)
+        {
+            throw new ServiceException("目标班级不存在");
+        }
+        List<SysStudent> beforeList = studentMapper.selectStudentListByIds(transferDto.getStudentIds());
+        if (beforeList == null || beforeList.isEmpty())
+        {
+            throw new ServiceException("未查询到需要调班的学生");
+        }
+        int rows = studentMapper.transferStudentClass(transferDto);
+        if (rows <= 0)
+        {
+            throw new ServiceException("批量调班失败");
+        }
+        transferLogService.insertStudentTransferLog(buildTransferLog(transferDto, beforeList, targetClass));
+        return rows;
+    }
+
+    /**
      * 新增学生信息
-     * 
+     *
      * @param student 学生信息
      * @return 结果
      */
@@ -79,7 +140,7 @@ public class SysStudentServiceImpl implements ISysStudentService
 
     /**
      * 修改学生信息
-     * 
+     *
      * @param student 学生信息
      * @return 结果
      */
@@ -91,7 +152,7 @@ public class SysStudentServiceImpl implements ISysStudentService
 
     /**
      * 批量删除学生信息
-     * 
+     *
      * @param studentIds 需要删除的学生信息主键
      * @return 结果
      */
@@ -102,8 +163,8 @@ public class SysStudentServiceImpl implements ISysStudentService
     }
 
     /**
-     * 删除学生信息信息
-     * 
+     * 删除学生信息
+     *
      * @param studentId 学生信息主键
      * @return 结果
      */
@@ -115,7 +176,7 @@ public class SysStudentServiceImpl implements ISysStudentService
 
     /**
      * 校验学号是否唯一
-     * 
+     *
      * @param student 学生信息
      * @return 结果
      */
@@ -129,7 +190,7 @@ public class SysStudentServiceImpl implements ISysStudentService
 
     /**
      * 校验身份证号是否唯一
-     * 
+     *
      * @param student 学生信息
      * @return 结果
      */
@@ -145,7 +206,7 @@ public class SysStudentServiceImpl implements ISysStudentService
      * 导入学生数据
      *
      * @param studentList 学生数据列表
-     * @param isUpdateSupport 是否更新已存在数据
+     * @param isUpdateSupport 是否更新已经存在的数据
      * @param operName 操作人
      * @return 导入结果
      */
@@ -154,7 +215,7 @@ public class SysStudentServiceImpl implements ISysStudentService
     {
         if (StringUtils.isNull(studentList) || studentList.size() == 0)
         {
-            throw new ServiceException("导入学生数据不能为空！");
+            throw new ServiceException("导入学生数据不能为空");
         }
         int successNum = 0;
         int failureNum = 0;
@@ -213,5 +274,28 @@ public class SysStudentServiceImpl implements ISysStudentService
         }
         successMsg.insert(0, "恭喜您，数据已全部导入成功！共 " + successNum + " 条，数据如下：");
         return successMsg.toString();
+    }
+
+    private SysStudentTransferLog buildTransferLog(SysStudentTransferDto transferDto, List<SysStudent> beforeList, SysClass targetClass)
+    {
+        SysStudentTransferLog transferLog = new SysStudentTransferLog();
+        transferLog.setStudentIds(Arrays.stream(transferDto.getStudentIds()).map(String::valueOf).collect(Collectors.joining(",")));
+        transferLog.setStudentCount(beforeList.size());
+        transferLog.setBeforeGrade(buildSummary(beforeList.stream().map(SysStudent::getGrade).collect(Collectors.toList())));
+        transferLog.setBeforeClassName(buildSummary(beforeList.stream().map(SysStudent::getClassName).collect(Collectors.toList())));
+        transferLog.setAfterGrade(targetClass.getGrade());
+        transferLog.setAfterClassName(targetClass.getClassName());
+        transferLog.setRemark(transferDto.getRemark());
+        transferLog.setTransferBy(transferDto.getUpdateBy());
+        transferLog.setTransferTime(DateUtils.getNowDate());
+        return transferLog;
+    }
+
+    private String buildSummary(List<String> values)
+    {
+        return values.stream()
+            .filter(StringUtils::isNotEmpty)
+            .distinct()
+            .collect(Collectors.joining(", "));
     }
 }
