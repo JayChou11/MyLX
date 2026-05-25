@@ -2,6 +2,8 @@ package com.ruoyi.system.mapper;
 
 import java.util.List;
 import com.ruoyi.system.domain.SysStudent;
+import com.ruoyi.system.domain.vo.SysStudentClassStat;
+import com.ruoyi.system.domain.vo.SysStudentTransferDto;
 
 /**
  * 学生信息Mapper接口
@@ -33,6 +35,13 @@ public interface SysStudentMapper
      * @return 学生信息
      */
     public List<SysStudent> selectStudentListByIds(Long[] ids);
+
+    /**
+     * 查询学生班级统计
+     *
+     * @return 学生班级统计集合
+     */
+    public List<SysStudentClassStat> selectStudentClassStatList();
 
     /**
      * 根据学号查询学生信息
@@ -81,4 +90,12 @@ public interface SysStudentMapper
      * @return 结果
      */
     public int deleteStudentByStudentIds(Long[] studentIds);
+
+    /**
+     * 批量调班
+     *
+     * @param transferDto 调班参数
+     * @return 结果
+     */
+    public int transferStudentClass(SysStudentTransferDto transferDto);
 }

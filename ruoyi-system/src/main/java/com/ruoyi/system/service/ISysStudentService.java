@@ -2,6 +2,8 @@ package com.ruoyi.system.service;
 
 import java.util.List;
 import com.ruoyi.system.domain.SysStudent;
+import com.ruoyi.system.domain.vo.SysStudentClassStat;
+import com.ruoyi.system.domain.vo.SysStudentTransferDto;
 
 /**
  * 学生信息Service接口
@@ -22,7 +24,7 @@ public interface ISysStudentService
      * 查询学生信息列表
      * 
      * @param student 学生信息
-     * @return 学生信息集合
+     * @return 学生信息集合cg
      */
     public List<SysStudent> selectStudentList(SysStudent student);
 
@@ -77,6 +79,13 @@ public interface ISysStudentService
     public List<SysStudent> selectStudentListByIds(Long[] ids);
 
     /**
+     * 查询学生班级统计
+     *
+     * @return 学生班级统计集合
+     */
+    public List<SysStudentClassStat> selectStudentClassStatList();
+
+    /**
      * 导入学生数据
      *
      * @param studentList 学生数据列表
@@ -85,4 +94,12 @@ public interface ISysStudentService
      * @return 导入结果
      */
     public String importStudent(List<SysStudent> studentList, Boolean isUpdateSupport, String operName);
+
+    /**
+     * 批量调班
+     *
+     * @param transferDto 调班参数
+     * @return 结果
+     */
+    public int transferStudentClass(SysStudentTransferDto transferDto);
 }

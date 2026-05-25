@@ -17,6 +17,14 @@ export function getStudent(studentId) {
   })
 }
 
+// 查询学生班级统计
+export function listStudentClassStats() {
+  return request({
+    url: '/system/student/classStats',
+    method: 'get'
+  })
+}
+
 // 新增学生信息
 export function addStudent(data) {
   return request({
@@ -30,6 +38,15 @@ export function addStudent(data) {
 export function updateStudent(data) {
   return request({
     url: '/system/student',
+    method: 'put',
+    data: data
+  })
+}
+
+// 批量调班
+export function transferStudentClass(data) {
+  return request({
+    url: '/system/student/transferClass',
     method: 'put',
     data: data
   })

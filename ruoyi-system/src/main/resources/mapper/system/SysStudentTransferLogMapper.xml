@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysStudentTransferLogMapper">
+
+    <resultMap type="SysStudentTransferLog" id="SysStudentTransferLogResult">
+        <id property="transferId" column="transfer_id" />
+        <result property="studentIds" column="student_ids" />
+        <result property="studentCount" column="student_count" />
+        <result property="beforeGrade" column="before_grade" />
+        <result property="beforeClassName" column="before_class_name" />
+        <result property="afterGrade" column="after_grade" />
+        <result property="afterClassName" column="after_class_name" />
+        <result property="remark" column="remark" />
+        <result property="transferBy" column="transfer_by" />
+        <result property="transferTime" column="transfer_time" />
+    </resultMap>
+
+    <sql id="selectStudentTransferLogVo">
+        select transfer_id, student_ids, student_count, before_grade, before_class_name,
+               after_grade, after_class_name, remark, transfer_by, transfer_time
+        from sys_student_transfer_log
+    </sql>
+
+    <select id="selectStudentTransferLogByTransferId" parameterType="Long" resultMap="SysStudentTransferLogResult">
+        <include refid="selectStudentTransferLogVo"/>
+        where transfer_id = #{transferId}
+    </select>
+
+    <select id="selectStudentTransferLogList" parameterType="SysStudentTransferLog" resultMap="SysStudentTransferLogResult">
+        <include refid="selectStudentTransferLogVo"/>
+        <where>
+            <if test="afterGrade != null and afterGrade != ''">
+                and after_grade like concat('%', #{afterGrade}, '%')
+            </if>
+            <if test="afterClassName != null and afterClassName != ''">
+                and after_class_name like concat('%', #{afterClassName}, '%')
+            </if>
+            <if test="transferBy != null and transferBy != ''">
+                and transfer_by like concat('%', #{transferBy}, '%')
+            </if>
+            <if test="params.beginTime != null and params.beginTime != ''">
+                and date_format(transfer_time, '%Y%m%d') &gt;= date_format(#{params.beginTime}, '%Y%m%d')
+            </if>
+            <if test="params.endTime != null and params.endTime != ''">
+                and date_format(transfer_time, '%Y%m%d') &lt;= date_format(#{params.endTime}, '%Y%m%d')
+            </if>
+        </where>
+        order by transfer_time desc, transfer_id desc
+    </select>
+
+    <insert id="insertStudentTransferLog" parameterType="SysStudentTransferLog" useGeneratedKeys="true" keyProperty="transferId">
+        insert into sys_student_transfer_log (
+            student_ids,
+            student_count,
+            before_grade,
+            before_class_name,
+            after_grade,
+            after_class_name,
+            remark,
+            transfer_by,
+            transfer_time
+        ) values (
+            #{studentIds},
+            #{studentCount},
+            #{beforeGrade},
+            #{beforeClassName},
+            #{afterGrade},
+            #{afterClassName},
+            #{remark},
+            #{transferBy},
+            #{transferTime}
+        )
+    </insert>
+
+</mapper>

@@ -1,9 +1,21 @@
 package com.ruoyi.web.controller.system;
 
+import java.util.ArrayList;
 import java.util.List;
-
+import org.springframework.beans.BeanUtils;
+import com.ruoyi.common.annotation.Log;
+import com.ruoyi.common.core.controller.BaseController;
+import com.ruoyi.common.core.domain.AjaxResult;
+import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.core.text.Convert;
+import com.ruoyi.common.enums.BusinessType;
+import com.ruoyi.common.enums.DesensitizedType;
 import com.ruoyi.common.utils.StringUtils;
+import com.ruoyi.common.utils.poi.ExcelUtil;
+import com.ruoyi.system.domain.SysStudent;
+import com.ruoyi.system.domain.vo.SysStudentListVo;
+import com.ruoyi.system.domain.vo.SysStudentTransferDto;
+import com.ruoyi.system.service.ISysStudentService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,18 +29,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-import com.ruoyi.common.annotation.Log;
-import com.ruoyi.common.core.controller.BaseController;
-import com.ruoyi.common.core.domain.AjaxResult;
-import com.ruoyi.common.core.page.TableDataInfo;
-import com.ruoyi.common.enums.BusinessType;
-import com.ruoyi.common.utils.poi.ExcelUtil;
-import com.ruoyi.system.domain.SysStudent;
-import com.ruoyi.system.service.ISysStudentService;
 
 /**
- * 学生信息Controller
- * 
+ * 学生信息 Controller
+ *
  * @author ruoyi
  */
 @RestController
@@ -47,7 +51,19 @@ public class SysStudentController extends BaseController
     {
         startPage();
         List<SysStudent> list = studentService.selectStudentList(student);
-        return getDataTable(list);
+        TableDataInfo rspData = getDataTable(list);
+        rspData.setRows(buildStudentListVo(list));
+        return rspData;
+    }
+
+    /**
+     * 查询学生班级统计
+     */
+    @PreAuthorize("@ss.hasPermi('system:student:list')")
+    @GetMapping("/classStats")
+    public AjaxResult classStats()
+    {
+        return success(studentService.selectStudentClassStatList());
     }
 
     /**
@@ -73,9 +89,6 @@ public class SysStudentController extends BaseController
     }
 
     /**
-     * 获取学生信息详细信息
-     */
-    /**
      * 导入学生信息
      */
     @Log(title = "学生信息", businessType = BusinessType.IMPORT)
@@ -100,6 +113,9 @@ public class SysStudentController extends BaseController
         util.importTemplateExcel(response, "学生数据");
     }
 
+    /**
+     * 获取学生信息详细信息
+     */
     @PreAuthorize("@ss.hasPermi('system:student:query')")
     @GetMapping(value = "/{studentId}")
     public AjaxResult getInfo(@PathVariable("studentId") Long studentId)
@@ -148,6 +164,17 @@ public class SysStudentController extends BaseController
     }
 
     /**
+     * 批量调班
+     */
+    @PreAuthorize("@ss.hasPermi('system:student:edit')")
+    @Log(title = "学生信息", businessType = BusinessType.UPDATE)
+    @PutMapping("/transferClass")
+    public AjaxResult transferClass(@Validated @RequestBody SysStudentTransferDto transferDto)
+    {
+        transferDto.setUpdateBy(getUsername());
+        return toAjax(studentService.transferStudentClass(transferDto));
+    }
+    /**
      * 删除学生信息
      */
     @PreAuthorize("@ss.hasPermi('system:student:remove')")
@@ -156,5 +183,27 @@ public class SysStudentController extends BaseController
     public AjaxResult remove(@PathVariable Long[] studentIds)
     {
         return toAjax(studentService.deleteStudentByStudentIds(studentIds));
+    }
+
+    private List<SysStudentListVo> buildStudentListVo(List<SysStudent> list)
+    {
+        List<SysStudentListVo> voList = new ArrayList<SysStudentListVo>(list.size());
+        for (SysStudent student : list)
+        {
+            SysStudentListVo vo = new SysStudentListVo();
+            BeanUtils.copyProperties(student, vo);
+            vo.setIdCard(maskIdCard(student.getIdCard()));
+            voList.add(vo);
+        }
+        return voList;
+    }
+
+    private String maskIdCard(String idCard)
+    {
+        if (StringUtils.isEmpty(idCard))
+        {
+            return idCard;
+        }
+        return DesensitizedType.ID_CARD.desensitizer().apply(idCard);
     }
 }
