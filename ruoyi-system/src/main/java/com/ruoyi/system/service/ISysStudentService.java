@@ -102,4 +102,9 @@ public interface ISysStudentService
      * @return 结果
      */
     public int transferStudentClass(SysStudentTransferDto transferDto);
+
+    /**
+     * 刷新班级统计缓存
+     */
+    public void refreshClassStatCache();
 }

@@ -7,6 +7,8 @@ import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
@@ -82,11 +84,12 @@ public class SysStudentServiceImpl implements ISysStudentService
     }
 
     /**
-     * 查询学生班级统计
+     * 查询学生班级统计（带缓存）
      *
      * @return 学生班级统计集合
      */
     @Override
+    @Cacheable(value = "studentClassStat", key = "'all'")
     public List<SysStudentClassStat> selectStudentClassStatList()
     {
         return studentMapper.selectStudentClassStatList();
@@ -100,6 +103,7 @@ public class SysStudentServiceImpl implements ISysStudentService
      */
     @Override
     @Transactional(rollbackFor = Exception.class)
+    @CacheEvict(value = "studentClassStat", key = "'all'")
     public int transferStudentClass(SysStudentTransferDto transferDto)
     {
         if (transferDto.getStudentIds() == null || transferDto.getStudentIds().length == 0)
@@ -133,6 +137,7 @@ public class SysStudentServiceImpl implements ISysStudentService
      * @return 结果
      */
     @Override
+    @CacheEvict(value = "studentClassStat", key = "'all'")
     public int insertStudent(SysStudent student)
     {
         return studentMapper.insertStudent(student);
@@ -145,6 +150,7 @@ public class SysStudentServiceImpl implements ISysStudentService
      * @return 结果
      */
     @Override
+    @CacheEvict(value = "studentClassStat", key = "'all'")
     public int updateStudent(SysStudent student)
     {
         return studentMapper.updateStudent(student);
@@ -157,6 +163,7 @@ public class SysStudentServiceImpl implements ISysStudentService
      * @return 结果
      */
     @Override
+    @CacheEvict(value = "studentClassStat", key = "'all'")
     public int deleteStudentByStudentIds(Long[] studentIds)
     {
         return studentMapper.deleteStudentByStudentIds(studentIds);
@@ -169,6 +176,7 @@ public class SysStudentServiceImpl implements ISysStudentService
      * @return 结果
      */
     @Override
+    @CacheEvict(value = "studentClassStat", key = "'all'")
     public int deleteStudentByStudentId(Long studentId)
     {
         return studentMapper.deleteStudentByStudentId(studentId);
@@ -211,6 +219,7 @@ public class SysStudentServiceImpl implements ISysStudentService
      * @return 导入结果
      */
     @Override
+    @CacheEvict(value = "studentClassStat", key = "'all'")
     public String importStudent(List<SysStudent> studentList, Boolean isUpdateSupport, String operName)
     {
         if (StringUtils.isNull(studentList) || studentList.size() == 0)
@@ -297,5 +306,15 @@ public class SysStudentServiceImpl implements ISysStudentService
             .filter(StringUtils::isNotEmpty)
             .distinct()
             .collect(Collectors.joining(", "));
+    }
+
+    /**
+     * 刷新班级统计缓存（先清除再查询，触发缓存重建）
+     */
+    @Override
+    @CacheEvict(value = "studentClassStat", key = "'all'")
+    public void refreshClassStatCache()
+    {
+        // 清除缓存后，下次查询会自动重新加载
     }
 }

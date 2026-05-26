@@ -282,6 +282,7 @@
       </el-table>
       <template #footer>
         <div class="dialog-footer">
+          <el-button type="primary" icon="Refresh" @click="handleRefreshClassStats">刷新缓存</el-button>
           <el-button @click="classStatsOpen = false">关 闭</el-button>
         </div>
       </template>
@@ -291,7 +292,7 @@
 
 <script setup name="Student">
 import ExcelImportDialog from "@/components/ExcelImportDialog"
-import { listStudent, getStudent, delStudent, addStudent, updateStudent, listStudentClassStats, transferStudentClass } from "@/api/system/student"
+import { listStudent, getStudent, delStudent, addStudent, updateStudent, listStudentClassStats, transferStudentClass, refreshClassStatsCache } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
 
 const { proxy } = getCurrentInstance()
@@ -471,6 +472,18 @@ function handleClassStats() {
   classStatsLoading.value = true
   listStudentClassStats().then(response => {
     classStatsList.value = response.data || []
+  }).finally(() => {
+    classStatsLoading.value = false
+  })
+}
+
+function handleRefreshClassStats() {
+  classStatsLoading.value = true
+  refreshClassStatsCache().then(() => {
+    return listStudentClassStats()
+  }).then(response => {
+    classStatsList.value = response.data || []
+    proxy.$modal.msgSuccess("刷新成功")
   }).finally(() => {
     classStatsLoading.value = false
   })

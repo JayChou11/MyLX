@@ -25,6 +25,14 @@ export function listStudentClassStats() {
   })
 }
 
+// 刷新班级统计缓存
+export function refreshClassStatsCache() {
+  return request({
+    url: '/system/student/classStats/cache',
+    method: 'delete'
+  })
+}
+
 // 新增学生信息
 export function addStudent(data) {
   return request({

@@ -67,6 +67,17 @@ public class SysStudentController extends BaseController
     }
 
     /**
+     * 刷新班级统计缓存
+     */
+    @PreAuthorize("@ss.hasPermi('system:student:list')")
+    @DeleteMapping("/classStats/cache")
+    public AjaxResult refreshClassStats()
+    {
+        studentService.refreshClassStatCache();
+        return success();
+    }
+
+    /**
      * 导出学生信息列表
      */
     @PreAuthorize("@ss.hasPermi('system:student:export')")
