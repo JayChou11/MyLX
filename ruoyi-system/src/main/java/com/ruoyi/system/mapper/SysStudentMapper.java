@@ -1,6 +1,7 @@
 package com.ruoyi.system.mapper;
 
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 import com.ruoyi.system.domain.SysStudent;
 import com.ruoyi.system.domain.vo.SysStudentClassStat;
 import com.ruoyi.system.domain.vo.SysStudentTransferDto;
@@ -98,4 +99,22 @@ public interface SysStudentMapper
      * @return 结果
      */
     public int transferStudentClass(SysStudentTransferDto transferDto);
+
+    /**
+     * 按班级批量升级学生班级（升年级）
+     *
+     * @param oldClassId 原班级ID
+     * @param newClassId 新班级ID
+     * @param updateBy   操作人
+     * @return 更新行数
+     */
+    public int upgradeStudentClassByClassId(@Param("oldClassId") Long oldClassId, @Param("newClassId") Long newClassId, @Param("updateBy") String updateBy);
+
+    /**
+     * 按班级ID批量删除学生（毕业处理）
+     *
+     * @param classIds 班级ID数组
+     * @return 删除行数
+     */
+    public int deleteStudentByClassIds(@Param("classIds") Long[] classIds);
 }

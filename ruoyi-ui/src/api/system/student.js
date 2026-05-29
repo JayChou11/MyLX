@@ -67,3 +67,11 @@ export function delStudent(studentId) {
     method: 'delete'
   })
 }
+
+// 执行升年级操作
+export function upgradeGrade() {
+  return request({
+    url: '/system/student/upgradeGrade',
+    method: 'post'
+  })
+}

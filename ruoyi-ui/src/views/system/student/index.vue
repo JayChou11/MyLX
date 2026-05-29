@@ -83,6 +83,9 @@
       <el-col :span="1.5">
         <el-button type="info" plain icon="DataAnalysis" @click="handleClassStats" v-hasPermi="['system:student:list']">班级统计</el-button>
       </el-col>
+      <el-col :span="1.5">
+        <el-button type="success" plain icon="Promotion" @click="handleUpgradeGrade" v-hasPermi="['system:student:upgrade']">执行升年级</el-button>
+      </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
@@ -292,7 +295,7 @@
 
 <script setup name="Student">
 import ExcelImportDialog from "@/components/ExcelImportDialog"
-import { listStudent, getStudent, delStudent, addStudent, updateStudent, listStudentClassStats, transferStudentClass, refreshClassStatsCache } from "@/api/system/student"
+import { listStudent, getStudent, delStudent, addStudent, updateStudent, listStudentClassStats, transferStudentClass, refreshClassStatsCache, upgradeGrade } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
 
 const { proxy } = getCurrentInstance()
@@ -584,6 +587,16 @@ function handleExportSelected() {
   proxy.download("system/student/export", {
     studentIds: ids.value.join(",")
   }, `student_selected_${new Date().getTime()}.xlsx`)
+}
+
+/** 执行升年级操作 */
+function handleUpgradeGrade() {
+  proxy.$modal.confirm('确认执行升年级操作？此操作将把所有学生升级到下一年级，最高年级学生将被标记为毕业并删除。执行后不可撤销！').then(function () {
+    return upgradeGrade()
+  }).then(response => {
+    getList()
+    proxy.$modal.msgSuccess(response.msg || "升年级执行完成")
+  }).catch(() => {})
 }
 
 // 初始化：加载年级选项 + 学生列表

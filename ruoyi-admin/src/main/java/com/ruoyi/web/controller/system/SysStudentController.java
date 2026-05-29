@@ -3,6 +3,7 @@ package com.ruoyi.web.controller.system;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.beans.BeanUtils;
+import com.ruoyi.common.annotation.AuditLog;
 import com.ruoyi.common.annotation.Log;
 import com.ruoyi.common.core.controller.BaseController;
 import com.ruoyi.common.core.domain.AjaxResult;
@@ -15,6 +16,7 @@ import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.system.domain.SysStudent;
 import com.ruoyi.system.domain.vo.SysStudentListVo;
 import com.ruoyi.system.domain.vo.SysStudentTransferDto;
+import com.ruoyi.system.service.ISysGradeUpgradeService;
 import com.ruoyi.system.service.ISysStudentService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +43,9 @@ public class SysStudentController extends BaseController
 {
     @Autowired
     private ISysStudentService studentService;
+
+    @Autowired
+    private ISysGradeUpgradeService gradeUpgradeService;
 
     /**
      * 查询学生信息列表
@@ -179,6 +184,7 @@ public class SysStudentController extends BaseController
      */
     @PreAuthorize("@ss.hasPermi('system:student:edit')")
     @Log(title = "学生信息", businessType = BusinessType.UPDATE)
+    @AuditLog(businessType = "TRANSFER", detail = "批量调班")
     @PutMapping("/transferClass")
     public AjaxResult transferClass(@Validated @RequestBody SysStudentTransferDto transferDto)
     {
@@ -186,10 +192,24 @@ public class SysStudentController extends BaseController
         return toAjax(studentService.transferStudentClass(transferDto));
     }
     /**
+     * 执行升年级操作
+     */
+    @PreAuthorize("@ss.hasPermi('system:student:upgrade')")
+    @Log(title = "学生升年级", businessType = BusinessType.UPDATE)
+    @AuditLog(businessType = "UPGRADE", detail = "执行升年级")
+    @PostMapping("/upgradeGrade")
+    public AjaxResult upgradeGrade()
+    {
+        String result = gradeUpgradeService.upgradeGrade();
+        return success(result);
+    }
+
+    /**
      * 删除学生信息
      */
     @PreAuthorize("@ss.hasPermi('system:student:remove')")
     @Log(title = "学生信息", businessType = BusinessType.DELETE)
+    @AuditLog(businessType = "DELETE", detail = "删除学生")
     @DeleteMapping("/{studentIds}")
     public AjaxResult remove(@PathVariable Long[] studentIds)
     {

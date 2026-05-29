@@ -172,4 +172,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach>
     </delete>
 
+    <update id="upgradeStudentClassByClassId">
+        update sys_student
+        set class_id = #{newClassId},
+            update_by = #{updateBy},
+            update_time = sysdate()
+        where class_id = #{oldClassId}
+    </update>
+
+    <delete id="deleteStudentByClassIds">
+        delete from sys_student where class_id in
+        <foreach item="classId" collection="classIds" open="(" separator="," close=")">
+            #{classId}
+        </foreach>
+    </delete>
+
 </mapper>
