@@ -11,8 +11,10 @@ import com.ruoyi.common.utils.http.UserAgentUtils;
 import com.ruoyi.common.utils.ip.AddressUtils;
 import com.ruoyi.common.utils.ip.IpUtils;
 import com.ruoyi.common.utils.spring.SpringUtils;
+import com.ruoyi.system.domain.SysAuditLog;
 import com.ruoyi.system.domain.SysLogininfor;
 import com.ruoyi.system.domain.SysOperLog;
+import com.ruoyi.system.service.ISysAuditLogService;
 import com.ruoyi.system.service.ISysLogininforService;
 import com.ruoyi.system.service.ISysOperLogService;
 
@@ -96,6 +98,24 @@ public class AsyncFactory
                 // 远程查询操作地点
                 operLog.setOperLocation(AddressUtils.getRealAddressByIP(operLog.getOperIp()));
                 SpringUtils.getBean(ISysOperLogService.class).insertOperlog(operLog);
+            }
+        };
+    }
+
+    /**
+     * 业务审计日志记录
+     *
+     * @param auditLog 审计日志信息
+     * @return 任务task
+     */
+    public static TimerTask recordAudit(final SysAuditLog auditLog)
+    {
+        return new TimerTask()
+        {
+            @Override
+            public void run()
+            {
+                SpringUtils.getBean(ISysAuditLogService.class).insertAuditLog(auditLog);
             }
         };
     }

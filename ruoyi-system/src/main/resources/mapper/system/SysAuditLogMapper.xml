@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysAuditLogMapper">
+
+    <resultMap type="SysAuditLog" id="SysAuditLogResult">
+        <id     property="auditId"        column="audit_id"        />
+        <result property="businessType"   column="business_type"   />
+        <result property="detail"         column="detail"          />
+        <result property="method"         column="method"          />
+        <result property="operName"       column="oper_name"       />
+        <result property="operIp"         column="oper_ip"         />
+        <result property="operTime"       column="oper_time"       />
+        <result property="beforeData"     column="before_data"     />
+        <result property="afterData"      column="after_data"      />
+        <result property="changeSummary"  column="change_summary"  />
+        <result property="status"         column="status"          />
+        <result property="errorMsg"       column="error_msg"       />
+    </resultMap>
+
+    <sql id="selectAuditLogVo">
+        select audit_id, business_type, detail, method, oper_name, oper_ip, oper_time,
+               before_data, after_data, change_summary, status, error_msg
+        from sys_audit_log
+    </sql>
+
+    <select id="selectAuditLogList" parameterType="SysAuditLog" resultMap="SysAuditLogResult">
+        <include refid="selectAuditLogVo"/>
+        <where>
+            <if test="businessType != null and businessType != ''">
+                and business_type = #{businessType}
+            </if>
+            <if test="detail != null and detail != ''">
+                and detail like concat('%', #{detail}, '%')
+            </if>
+            <if test="operName != null and operName != ''">
+                and oper_name like concat('%', #{operName}, '%')
+            </if>
+            <if test="status != null">
+                and status = #{status}
+            </if>
+            <if test="params.beginTime != null and params.beginTime != ''">
+                and date_format(oper_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+            </if>
+            <if test="params.endTime != null and params.endTime != ''">
+                and date_format(oper_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+            </if>
+        </where>
+        order by audit_id desc
+    </select>
+
+    <insert id="insertAuditLog" parameterType="SysAuditLog" useGeneratedKeys="true" keyProperty="auditId">
+        insert into sys_audit_log(
+            business_type, detail, method, oper_name, oper_ip, oper_time,
+            before_data, after_data, change_summary, status, error_msg
+        ) values (
+            #{businessType}, #{detail}, #{method}, #{operName}, #{operIp}, #{operTime},
+            #{beforeData}, #{afterData}, #{changeSummary}, #{status}, #{errorMsg}
+        )
+    </insert>
+
+</mapper>
