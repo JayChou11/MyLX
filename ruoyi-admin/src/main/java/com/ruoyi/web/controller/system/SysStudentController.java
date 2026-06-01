@@ -184,7 +184,7 @@ public class SysStudentController extends BaseController
      */
     @PreAuthorize("@ss.hasPermi('system:student:edit')")
     @Log(title = "学生信息", businessType = BusinessType.UPDATE)
-    @AuditLog(businessType = "TRANSFER", detail = "批量调班")
+    @AuditLog(businessType = "TRANSFER", detail = "批量调班", beforeDesc = "将选中的学生调至目标班级")
     @PutMapping("/transferClass")
     public AjaxResult transferClass(@Validated @RequestBody SysStudentTransferDto transferDto)
     {
@@ -196,7 +196,7 @@ public class SysStudentController extends BaseController
      */
     @PreAuthorize("@ss.hasPermi('system:student:upgrade')")
     @Log(title = "学生升年级", businessType = BusinessType.UPDATE)
-    @AuditLog(businessType = "UPGRADE", detail = "执行升年级")
+    @AuditLog(businessType = "UPGRADE", detail = "执行升年级", beforeDesc = "全校学生升入下一年级，毕业年级学生将被删除")
     @PostMapping("/upgradeGrade")
     public AjaxResult upgradeGrade()
     {
@@ -209,7 +209,7 @@ public class SysStudentController extends BaseController
      */
     @PreAuthorize("@ss.hasPermi('system:student:remove')")
     @Log(title = "学生信息", businessType = BusinessType.DELETE)
-    @AuditLog(businessType = "DELETE", detail = "删除学生")
+    @AuditLog(businessType = "DELETE", detail = "删除学生", beforeDesc = "删除选中的学生记录")
     @DeleteMapping("/{studentIds}")
     public AjaxResult remove(@PathVariable Long[] studentIds)
     {

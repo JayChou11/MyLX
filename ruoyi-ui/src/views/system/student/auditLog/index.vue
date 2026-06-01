@@ -100,10 +100,10 @@
         </el-descriptions-item>
         <el-descriptions-item label="变更摘要" :span="2">{{ detailRow.changeSummary }}</el-descriptions-item>
         <el-descriptions-item label="变更前数据" :span="2">
-          <pre class="json-data">{{ formatJson(detailRow.beforeData) }}</pre>
+          <div class="audit-data-content">{{ detailRow.beforeData || '无' }}</div>
         </el-descriptions-item>
         <el-descriptions-item label="变更后数据" :span="2">
-          <pre class="json-data">{{ formatJson(detailRow.afterData) }}</pre>
+          <div class="audit-data-content">{{ detailRow.afterData || '无' }}</div>
         </el-descriptions-item>
         <el-descriptions-item v-if="detailRow.errorMsg" label="错误消息" :span="2">
           <span style="color: #f56c6c">{{ detailRow.errorMsg }}</span>
@@ -172,28 +172,20 @@ function handleExport() {
   }, `audit_log_${new Date().getTime()}.xlsx`)
 }
 
-function formatJson(jsonStr) {
-  if (!jsonStr) return ''
-  try {
-    return JSON.stringify(JSON.parse(jsonStr), null, 2)
-  } catch (e) {
-    return jsonStr
-  }
-}
-
 getList()
 </script>
 
 <style scoped>
-.json-data {
+.audit-data-content {
   max-height: 200px;
   overflow: auto;
   background: #f5f7fa;
   padding: 8px 12px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-all;
-  margin: 0;
+  color: #303133;
 }
 </style>

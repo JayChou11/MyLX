@@ -1,5 +1,6 @@
 package com.ruoyi.framework.aspectj;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.util.Date;
 import org.aspectj.lang.JoinPoint;
@@ -46,7 +47,10 @@ public class AuditLogAspect
     private static final ThreadLocal<String> BEFORE_DATA_THREADLOCAL = new ThreadLocal<>();
 
     /**
-     * 处理请求前执行 —— 暂存方法参数（变更前数据）
+     * 处理请求前执行 —— 构建业务视角的"变更前数据"
+     *
+     * 改进：不再直接序列化原始 JSON 参数，
+     * 而是：注解的 beforeDesc（业务意图） + 反射提取参数的可读字段
      *
      * @param joinPoint 切点
      * @param auditLog  注解实例（Spring 自动注入匹配到的注解对象）
@@ -54,17 +58,31 @@ public class AuditLogAspect
     @Before(value = "@annotation(auditLog)")
     public void doBefore(JoinPoint joinPoint, AuditLog auditLog)
     {
-        // 序列化方法参数作为"变更前数据"
         try
         {
-            Object[] args = joinPoint.getArgs();
-            String beforeData = argsArrayToString(args);
-            // 截取防止过长
-            BEFORE_DATA_THREADLOCAL.set(StringUtils.substring(beforeData, 0, 2000));
+            // 1. 取注解的业务意图描述
+            StringBuilder beforeData = new StringBuilder();
+            if (StringUtils.isNotEmpty(auditLog.beforeDesc()))
+            {
+                beforeData.append(auditLog.beforeDesc());
+            }
+
+            // 2. 用反射提取参数对象的可读字段（字段名=值），而非原始 JSON
+            String readableParams = argsArrayToReadableString(joinPoint.getArgs());
+            if (StringUtils.isNotEmpty(readableParams))
+            {
+                if (beforeData.length() > 0)
+                {
+                    beforeData.append("\n");
+                }
+                beforeData.append("操作参数：").append(readableParams);
+            }
+
+            BEFORE_DATA_THREADLOCAL.set(StringUtils.substring(beforeData.toString(), 0, 2000));
         }
         catch (Exception e)
         {
-            log.error("审计日志@Before序列化参数异常: {}", e.getMessage());
+            log.error("审计日志@Before构建变更前数据异常: {}", e.getMessage());
             BEFORE_DATA_THREADLOCAL.set("");
         }
     }
@@ -121,13 +139,28 @@ public class AuditLogAspect
             // 4. 变更前数据（从 ThreadLocal 取出 @Before 中暂存的参数）
             auditLogEntity.setBeforeData(BEFORE_DATA_THREADLOCAL.get());
 
-            // 5. 变更后数据（序列化方法返回值）
+            // 5. 变更后数据：只记录业务结果描述（AjaxResult 的 msg），不再存整个请求响应
             String afterData = "";
             if (jsonResult != null)
             {
-                afterData = StringUtils.substring(JSON.toJSONString(jsonResult), 0, 2000);
+                // 反射读取返回对象的 msg 属性作为"变更后数据"
+                // 因为 msg 才是业务层面的描述（如"升年级执行完成！共升级X名学生"）
+                String msgFromResult = extractMsgByReflection(jsonResult);
+                if (StringUtils.isNotEmpty(msgFromResult))
+                {
+                    afterData = msgFromResult;
+                }
+                else
+                {
+                    // 如果没有 msg，则尝试提取 data 字段
+                    String dataFromResult = extractDataByReflection(jsonResult);
+                    if (StringUtils.isNotEmpty(dataFromResult))
+                    {
+                        afterData = dataFromResult;
+                    }
+                }
             }
-            auditLogEntity.setAfterData(afterData);
+            auditLogEntity.setAfterData(StringUtils.substring(afterData, 0, 2000));
 
             // 6. 生成变更摘要：用方法返回值的 msg 字段，或用注解的 detail
             String changeSummary = auditLog.detail();
@@ -203,9 +236,19 @@ public class AuditLogAspect
     }
 
     /**
-     * 将方法参数数组序列化为 JSON 字符串
+     * 将方法参数数组转为业务视角的可读字符串
+     *
+     * 改进：不再直接序列化原始 JSON，而是用反射提取参数对象的字段名和值，
+     * 格式化为 "字段名=值" 的可读形式。
+     *
+     * 例如：原来输出 {"studentIds":[1,2],"classId":5}
+     *       现在输出 studentIds=[1, 2], classId=5
+     *
+     * 这是反射的第二个核心演示：
+     * - 对简单类型（Long[], String等），直接展示值
+     * - 对复杂对象（DTO、Entity），用反射提取字段名=值
      */
-    private String argsArrayToString(Object[] paramsArray)
+    private String argsArrayToReadableString(Object[] paramsArray)
     {
         StringBuilder params = new StringBuilder();
         if (paramsArray != null && paramsArray.length > 0)
@@ -216,16 +259,142 @@ public class AuditLogAspect
                 {
                     try
                     {
-                        params.append(JSON.toJSONString(o)).append(" ");
+                        String readableParam = objectToReadableString(o);
+                        if (StringUtils.isNotEmpty(readableParam))
+                        {
+                            if (params.length() > 0)
+                            {
+                                params.append("; ");
+                            }
+                            params.append(readableParam);
+                        }
                     }
                     catch (Exception e)
                     {
-                        log.error("参数序列化异常: {}", e.getMessage());
+                        log.error("参数转可读字符串异常: {}", e.getMessage());
                     }
                 }
             }
         }
         return params.toString().trim();
+    }
+
+    /**
+     * 将单个对象转为可读字符串
+     *
+     * 反射演示：
+     * - 数组/集合类型 → 直接展示值列表
+     * - DTO/Entity对象 → 反射提取每个字段的名称和值，格式化为"字段名=值"
+     * - 简单类型 → 直接展示值
+     */
+    private String objectToReadableString(Object obj)
+    {
+        Class<?> clazz = obj.getClass();
+
+        // 数组类型：直接展示元素列表
+        if (clazz.isArray())
+        {
+            // 用 java.lang.reflect.Array 统一处理基本类型数组（如 long[]）和对象数组（如 Long[]）
+            int length = Array.getLength(obj);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < Math.min(length, 20); i++)
+            {
+                if (i > 0) sb.append(", ");
+                sb.append(Array.get(obj, i));
+            }
+            if (length > 20)
+            {
+                sb.append("...(共").append(length).append("项)");
+            }
+            return sb.toString();
+        }
+
+        // 基本类型和String：直接展示值
+        if (clazz.isPrimitive() || obj instanceof String || obj instanceof Number)
+        {
+            return obj.toString();
+        }
+
+        // DTO/Entity对象：反射提取字段名=值
+        // 只取业务相关的字段（跳过 updateBy 等内部字段），最多取10个字段
+        StringBuilder sb = new StringBuilder();
+        Field[] fields = clazz.getDeclaredFields();
+        int count = 0;
+        for (Field field : fields)
+        {
+            String fieldName = field.getName();
+            // 跳过内部字段和序列化字段
+            if ("serialVersionUID".equals(fieldName) || "updateBy".equals(fieldName)
+                    || "createBy".equals(fieldName) || "createTime".equals(fieldName)
+                    || "updateTime".equals(fieldName) || "remark".equals(fieldName))
+            {
+                continue;
+            }
+            try
+            {
+                field.setAccessible(true);
+                Object value = field.get(obj);
+                if (value != null)
+                {
+                    if (count > 0) sb.append(", ");
+                    // 字段值如果是数组，简短展示（用 java.lang.reflect.Array 统一处理）
+                    if (value.getClass().isArray())
+                    {
+                        int arrLen = Array.getLength(value);
+                        StringBuilder arrSb = new StringBuilder();
+                        for (int i = 0; i < Math.min(arrLen, 10); i++)
+                        {
+                            if (i > 0) arrSb.append(", ");
+                            arrSb.append(Array.get(value, i));
+                        }
+                        if (arrLen > 10) arrSb.append("...(共").append(arrLen).append("项)");
+                        sb.append(fieldName).append("=[").append(arrSb).append("]");
+                    }
+                    else
+                    {
+                        sb.append(fieldName).append("=").append(value);
+                    }
+                    count++;
+                    if (count >= 10) break;  // 最多展示10个字段
+                }
+            }
+            catch (Exception e)
+            {
+                // 反射读取失败，跳过此字段
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 通过反射提取返回对象中的 data 属性
+     *
+     * @param obj 目标对象
+     * @return data 字段的字符串表示，如果没有则返回 null
+     */
+    private String extractDataByReflection(Object obj)
+    {
+        try
+        {
+            Field[] fields = obj.getClass().getDeclaredFields();
+            for (Field field : fields)
+            {
+                if ("data".equals(field.getName()))
+                {
+                    field.setAccessible(true);
+                    Object value = field.get(obj);
+                    if (value != null)
+                    {
+                        return StringUtils.substring(JSON.toJSONString(value), 0, 500);
+                    }
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            log.warn("反射读取data字段异常: {}", e.getMessage());
+        }
+        return null;
     }
 
     /**
