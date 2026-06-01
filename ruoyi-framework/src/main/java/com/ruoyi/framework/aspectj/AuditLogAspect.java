@@ -1,20 +1,16 @@
 package com.ruoyi.framework.aspectj;
 
-import java.lang.reflect.Method;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.List;
 import org.aspectj.lang.JoinPoint;
-import org.aspectj.lang.Signature;
 import org.aspectj.lang.annotation.AfterReturning;
 import org.aspectj.lang.annotation.AfterThrowing;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
-import org.aspectj.lang.reflect.MethodSignature;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.multipart.MultipartFile;
 import com.alibaba.fastjson2.JSON;
 import com.ruoyi.common.annotation.AuditLog;
 import com.ruoyi.common.utils.SecurityUtils;
@@ -241,14 +237,14 @@ public class AuditLogAspect
         Class<?> clazz = o.getClass();
         if (clazz.isArray())
         {
-            return clazz.getComponentType().isAssignableFrom(jakarta.servlet.http.MultipartFile.class);
+            return clazz.getComponentType().isAssignableFrom(MultipartFile.class);
         }
         else if (java.util.Collection.class.isAssignableFrom(clazz))
         {
             java.util.Collection collection = (java.util.Collection) o;
             for (Object value : collection)
             {
-                return value instanceof jakarta.servlet.http.MultipartFile;
+                return value instanceof MultipartFile;
             }
         }
         else if (java.util.Map.class.isAssignableFrom(clazz))
@@ -257,10 +253,10 @@ public class AuditLogAspect
             for (Object value : map.entrySet())
             {
                 java.util.Map.Entry entry = (java.util.Map.Entry) value;
-                return entry.getValue() instanceof jakarta.servlet.http.MultipartFile;
+                return entry.getValue() instanceof MultipartFile;
             }
         }
-        return o instanceof jakarta.servlet.http.MultipartFile
+        return o instanceof MultipartFile
                 || o instanceof jakarta.servlet.http.HttpServletRequest
                 || o instanceof jakarta.servlet.http.HttpServletResponse;
     }
