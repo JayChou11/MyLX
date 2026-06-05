@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysTransferApplyMapper">
+
+    <resultMap type="SysTransferApply" id="SysTransferApplyResult">
+        <result property="applyId" column="apply_id"/>
+        <result property="studentId" column="student_id"/>
+        <result property="studentName" column="student_name"/>
+        <result property="beforeClassId" column="before_class_id"/>
+        <result property="beforeClassName" column="before_class_name"/>
+        <result property="beforeGrade" column="before_grade"/>
+        <result property="afterClassId" column="after_class_id"/>
+        <result property="afterClassName" column="after_class_name"/>
+        <result property="afterGrade" column="after_grade"/>
+        <result property="applyReason" column="apply_reason"/>
+        <result property="applyBy" column="apply_by"/>
+        <result property="applyTime" column="apply_time"/>
+        <result property="status" column="status"/>
+        <result property="rejectReason" column="reject_reason"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateBy" column="update_by"/>
+        <result property="updateTime" column="update_time"/>
+        <result property="remark" column="remark"/>
+    </resultMap>
+
+    <sql id="selectTransferApplyVo">
+        select a.apply_id, a.student_id, a.student_name, a.before_class_id, a.before_class_name, a.before_grade,
+               a.after_class_id, a.after_class_name, a.after_grade, a.apply_reason, a.apply_by, a.apply_time,
+               a.status, a.reject_reason, a.create_by, a.create_time, a.update_by, a.update_time, a.remark
+        from sys_transfer_apply a
+        left join sys_class c on a.before_class_id = c.class_id
+    </sql>
+
+    <select id="selectTransferApplyByApplyId" parameterType="Long" resultMap="SysTransferApplyResult">
+        <include refid="selectTransferApplyVo"/>
+        where a.apply_id = #{applyId}
+    </select>
+
+    <select id="selectTransferApplyList" parameterType="SysTransferApply" resultMap="SysTransferApplyResult">
+        <include refid="selectTransferApplyVo"/>
+        <where>
+            <if test="studentId != null">
+                AND a.student_id = #{studentId}
+            </if>
+            <if test="studentName != null and studentName != ''">
+                AND a.student_name like concat('%', #{studentName}, '%')
+            </if>
+            <if test="status != null and status != ''">
+                AND a.status = #{status}
+            </if>
+            <if test="applyBy != null and applyBy != ''">
+                AND a.apply_by like concat('%', #{applyBy}, '%')
+            </if>
+            <if test="beforeGrade != null and beforeGrade != ''">
+                AND a.before_grade = #{beforeGrade}
+            </if>
+            <if test="afterGrade != null and afterGrade != ''">
+                AND a.after_grade = #{afterGrade}
+            </if>
+            <if test="params.beginTime != null">
+                AND a.apply_time &gt;= #{params.beginTime}
+            </if>
+            <if test="params.endTime != null">
+                AND a.apply_time &lt;= #{params.endTime}
+            </if>
+            <if test="params.currentUsername != null and params.currentUsername != ''">
+                AND (
+                    a.apply_by = #{params.currentUsername}
+                    <if test="params.approveBy != null and params.approveBy != ''">
+                        OR c.teacher_name = #{params.approveBy}
+                    </if>
+                    <if test="params.approveNickName != null and params.approveNickName != ''">
+                        OR c.teacher_name = #{params.approveNickName}
+                    </if>
+                )
+            </if>
+        </where>
+        order by a.apply_time desc
+    </select>
+
+    <select id="selectMyApproveList" parameterType="SysTransferApply" resultMap="SysTransferApplyResult">
+        <include refid="selectTransferApplyVo"/>
+        <where>
+            <if test="status == '0'">
+                AND a.status = '0'
+            </if>
+            <if test="status == '1'">
+                AND a.status = '1'
+            </if>
+            <if test="params.approveBy != null and params.approveBy != ''">
+                AND (
+                    c.teacher_name = #{params.approveBy}
+                    <if test="params.approveNickName != null and params.approveNickName != ''">
+                        OR c.teacher_name = #{params.approveNickName}
+                    </if>
+                )
+            </if>
+        </where>
+        order by a.apply_time desc
+    </select>
+
+    <insert id="insertTransferApply" parameterType="SysTransferApply" useGeneratedKeys="true" keyProperty="applyId">
+        insert into sys_transfer_apply (
+            <if test="studentId != null">student_id,</if>
+            <if test="studentName != null and studentName != ''">student_name,</if>
+            <if test="beforeClassId != null">before_class_id,</if>
+            <if test="beforeClassName != null and beforeClassName != ''">before_class_name,</if>
+            <if test="beforeGrade != null and beforeGrade != ''">before_grade,</if>
+            <if test="afterClassId != null">after_class_id,</if>
+            <if test="afterClassName != null and afterClassName != ''">after_class_name,</if>
+            <if test="afterGrade != null and afterGrade != ''">after_grade,</if>
+            <if test="applyReason != null and applyReason != ''">apply_reason,</if>
+            <if test="applyBy != null and applyBy != ''">apply_by,</if>
+            <if test="applyTime != null">apply_time,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            create_time
+        )values(
+            <if test="studentId != null">#{studentId},</if>
+            <if test="studentName != null and studentName != ''">#{studentName},</if>
+            <if test="beforeClassId != null">#{beforeClassId},</if>
+            <if test="beforeClassName != null and beforeClassName != ''">#{beforeClassName},</if>
+            <if test="beforeGrade != null and beforeGrade != ''">#{beforeGrade},</if>
+            <if test="afterClassId != null">#{afterClassId},</if>
+            <if test="afterClassName != null and afterClassName != ''">#{afterClassName},</if>
+            <if test="afterGrade != null and afterGrade != ''">#{afterGrade},</if>
+            <if test="applyReason != null and applyReason != ''">#{applyReason},</if>
+            <if test="applyBy != null and applyBy != ''">#{applyBy},</if>
+            <if test="applyTime != null">#{applyTime},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            sysdate()
+        )
+    </insert>
+
+    <update id="updateTransferApply" parameterType="SysTransferApply">
+        update sys_transfer_apply
+        <set>
+            <if test="studentId != null">student_id = #{studentId},</if>
+            <if test="studentName != null">student_name = #{studentName},</if>
+            <if test="beforeClassId != null">before_class_id = #{beforeClassId},</if>
+            <if test="beforeClassName != null">before_class_name = #{beforeClassName},</if>
+            <if test="beforeGrade != null">before_grade = #{beforeGrade},</if>
+            <if test="afterClassId != null">after_class_id = #{afterClassId},</if>
+            <if test="afterClassName != null">after_class_name = #{afterClassName},</if>
+            <if test="afterGrade != null">after_grade = #{afterGrade},</if>
+            <if test="applyReason != null">apply_reason = #{applyReason},</if>
+            <if test="applyBy != null">apply_by = #{applyBy},</if>
+            <if test="applyTime != null">apply_time = #{applyTime},</if>
+            <if test="status != null">status = #{status},</if>
+            <if test="rejectReason != null">reject_reason = #{rejectReason},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </set>
+        where apply_id = #{applyId}
+    </update>
+
+    <delete id="deleteTransferApplyByApplyId" parameterType="Long">
+        delete from sys_transfer_apply where apply_id = #{applyId}
+    </delete>
+
+    <delete id="deleteTransferApplyByApplyIds" parameterType="String">
+        delete from sys_transfer_apply where apply_id in
+        <foreach item="applyId" collection="array" open="(" separator="," close=")">
+            #{applyId}
+        </foreach>
+    </delete>
+
+    <select id="countPendingByLevel" parameterType="Integer" resultType="Integer">
+        select count(1)
+        from sys_transfer_apply
+        where
+        <choose>
+            <when test="approveLevel == 1">
+                status = '0'
+            </when>
+            <when test="approveLevel == 2">
+                status = '1'
+            </when>
+            <otherwise>
+                1 = 0
+            </otherwise>
+        </choose>
+    </select>
+</mapper>

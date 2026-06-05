@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysTransferApproveMapper">
+
+    <resultMap type="SysTransferApprove" id="SysTransferApproveResult">
+        <result property="approveId" column="approve_id"/>
+        <result property="applyId" column="apply_id"/>
+        <result property="approveLevel" column="approve_level"/>
+        <result property="approveBy" column="approve_by"/>
+        <result property="approveTime" column="approve_time"/>
+        <result property="approveResult" column="approve_result"/>
+        <result property="approveRemark" column="approve_remark"/>
+        <result property="createBy" column="create_by"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <sql id="selectTransferApproveVo">
+        select approve_id, apply_id, approve_level, approve_by, approve_time, approve_result,
+               approve_remark, create_by, create_time
+        from sys_transfer_approve
+    </sql>
+
+    <select id="selectTransferApproveByApproveId" parameterType="Long" resultMap="SysTransferApproveResult">
+        <include refid="selectTransferApproveVo"/>
+        where approve_id = #{approveId}
+    </select>
+
+    <select id="selectTransferApproveByApplyId" parameterType="Long" resultMap="SysTransferApproveResult">
+        <include refid="selectTransferApproveVo"/>
+        where apply_id = #{applyId}
+        order by approve_time asc
+    </select>
+
+    <insert id="insertTransferApprove" parameterType="SysTransferApprove" useGeneratedKeys="true" keyProperty="approveId">
+        insert into sys_transfer_approve (
+            <if test="applyId != null">apply_id,</if>
+            <if test="approveLevel != null and approveLevel != ''">approve_level,</if>
+            <if test="approveBy != null and approveBy != ''">approve_by,</if>
+            <if test="approveTime != null">approve_time,</if>
+            <if test="approveResult != null and approveResult != ''">approve_result,</if>
+            <if test="approveRemark != null and approveRemark != ''">approve_remark,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            create_time
+        )values(
+            <if test="applyId != null">#{applyId},</if>
+            <if test="approveLevel != null and approveLevel != ''">#{approveLevel},</if>
+            <if test="approveBy != null and approveBy != ''">#{approveBy},</if>
+            <if test="approveTime != null">#{approveTime},</if>
+            <if test="approveResult != null and approveResult != ''">#{approveResult},</if>
+            <if test="approveRemark != null and approveRemark != ''">#{approveRemark},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            sysdate()
+        )
+    </insert>
+
+    <delete id="deleteTransferApproveByApproveId" parameterType="Long">
+        delete from sys_transfer_approve where approve_id = #{approveId}
+    </delete>
+
+    <delete id="deleteTransferApproveByApproveIds" parameterType="String">
+        delete from sys_transfer_approve where approve_id in
+        <foreach item="approveId" collection="array" open="(" separator="," close=")">
+            #{approveId}
+        </foreach>
+    </delete>
+
+    <delete id="deleteTransferApproveByApplyId" parameterType="Long">
+        delete from sys_transfer_approve where apply_id = #{applyId}
+    </delete>
+</mapper>

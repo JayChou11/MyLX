@@ -66,6 +66,9 @@
         <el-button type="warning" plain icon="Edit" :disabled="multiple" @click="handleTransferClass" v-hasPermi="['system:student:edit']">批量调班</el-button>
       </el-col>
       <el-col :span="1.5">
+        <el-button type="primary" plain icon="Promotion" :disabled="single" @click="handleApplyTransfer" v-hasPermi="['system:student:transferApprove:add']">申请转班</el-button>
+      </el-col>
+      <el-col :span="1.5">
         <el-button type="info" plain icon="Tickets" @click="goTransferRecord" v-hasPermi="['system:student:transfer:list']">调班记录</el-button>
       </el-col>
       <el-col :span="1.5">
@@ -114,9 +117,10 @@
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="140">
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="200">
         <template #default="scope">
           <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['system:student:edit']">修改</el-button>
+          <el-button link type="primary" icon="Promotion" @click="handleApplyTransferSingle(scope.row)" v-hasPermi="['system:student:transferApprove:add']">申请转班</el-button>
           <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['system:student:remove']">删除</el-button>
         </template>
       </el-table-column>
@@ -290,6 +294,51 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 申请转班对话框 -->
+    <el-dialog title="申请转班" v-model="applyTransferOpen" width="600px" append-to-body @close="cancelApplyTransfer">
+      <div class="tip-text">
+        为学生 <strong>{{ applyTransferForm.studentName }}</strong> 申请转班，需要经过班主任和教务处审批后才能执行。
+      </div>
+      <el-form ref="applyTransferRef" :model="applyTransferForm" :rules="applyTransferRules" label-width="92px">
+        <el-form-item label="目标年级" prop="afterGrade">
+          <el-select v-model="applyTransferForm.afterGrade" placeholder="请选择目标年级" style="width: 100%" @change="handleApplyTransferGradeChange">
+            <el-option
+              v-for="item in gradeOptions"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标班级" prop="afterClassId">
+          <el-select v-model="applyTransferForm.afterClassId" placeholder="请先选择目标年级" style="width: 100%">
+            <el-option
+              v-for="item in applyTransferClassOptions"
+              :key="item.classId"
+              :label="item.className"
+              :value="item.classId"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="申请原因" prop="applyReason">
+          <el-input
+            v-model="applyTransferForm.applyReason"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入转班申请原因"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button type="primary" @click="submitApplyTransfer">提交申请</el-button>
+          <el-button @click="cancelApplyTransfer">取 消</el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -297,6 +346,7 @@
 import ExcelImportDialog from "@/components/ExcelImportDialog"
 import { listStudent, getStudent, delStudent, addStudent, updateStudent, listStudentClassStats, transferStudentClass, refreshClassStatsCache, upgradeGrade } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
+import { addTransferApply } from "@/api/system/transferApply"
 
 const { proxy } = getCurrentInstance()
 const { sys_user_sex } = useDict("sys_user_sex")
@@ -304,6 +354,7 @@ const { sys_user_sex } = useDict("sys_user_sex")
 const studentList = ref([])
 const open = ref(false)
 const transferOpen = ref(false)
+const applyTransferOpen = ref(false)
 const loading = ref(true)
 const showSearch = ref(true)
 const ids = ref([])
@@ -319,11 +370,19 @@ const classStatsList = ref([])
 const classOptions = ref([])
 const formClassOptions = ref([])
 const transferClassOptions = ref([])
+const applyTransferClassOptions = ref([])
 const gradeOptions = ref([])
 
 const data = reactive({
   form: {},
   transferForm: {},
+  applyTransferForm: {
+    studentId: undefined,
+    studentName: undefined,
+    afterGrade: undefined,
+    afterClassId: undefined,
+    applyReason: undefined
+  },
   queryParams: {
     pageNum: 1,
     pageSize: 10,
@@ -351,10 +410,15 @@ const data = reactive({
   transferRules: {
     grade: [{ required: true, message: "目标年级不能为空", trigger: "change" }],
     classId: [{ required: true, message: "目标班级不能为空", trigger: "change" }]
+  },
+  applyTransferRules: {
+    afterGrade: [{ required: true, message: "目标年级不能为空", trigger: "change" }],
+    afterClassId: [{ required: true, message: "目标班级不能为空", trigger: "change" }],
+    applyReason: [{ required: true, message: "申请原因不能为空", trigger: "blur" }]
   }
 })
 
-const { queryParams, form, rules, transferForm, transferRules } = toRefs(data)
+const { queryParams, form, rules, transferForm, transferRules, applyTransferForm, applyTransferRules } = toRefs(data)
 
 /** 加载年级选项（从全部班级列表中提取去重） */
 function loadGradeOptions() {
@@ -505,6 +569,71 @@ function handleTransferClass() {
 function cancelTransfer() {
   transferOpen.value = false
   resetTransfer()
+}
+
+/** 批量申请转班 */
+function handleApplyTransfer() {
+  if (ids.value.length !== 1) {
+    proxy.$modal.msgWarning("请选择一名学生申请转班")
+    return
+  }
+  const student = studentList.value.find(item => item.studentId === ids.value[0])
+  if (student) {
+    resetApplyTransfer()
+    applyTransferForm.value.studentId = student.studentId
+    applyTransferForm.value.studentName = student.studentName
+    applyTransferOpen.value = true
+  }
+}
+
+/** 单条申请转班 */
+function handleApplyTransferSingle(row) {
+  resetApplyTransfer()
+  applyTransferForm.value.studentId = row.studentId
+  applyTransferForm.value.studentName = row.studentName
+  applyTransferOpen.value = true
+}
+
+/** 取消申请转班 */
+function cancelApplyTransfer() {
+  applyTransferOpen.value = false
+  resetApplyTransfer()
+}
+
+/** 重置申请转班表单 */
+function resetApplyTransfer() {
+  applyTransferForm.value = {
+    studentId: undefined,
+    studentName: undefined,
+    afterGrade: undefined,
+    afterClassId: undefined,
+    applyReason: undefined
+  }
+  applyTransferClassOptions.value = []
+  proxy.resetForm("applyTransferRef")
+}
+
+/** 申请转班年级变化 */
+function handleApplyTransferGradeChange(grade) {
+  applyTransferForm.value.afterClassId = undefined
+  applyTransferClassOptions.value = []
+  if (grade) {
+    optionselectClass(grade).then(response => {
+      applyTransferClassOptions.value = response.data || []
+    })
+  }
+}
+
+/** 提交申请转班 */
+function submitApplyTransfer() {
+  proxy.$refs["applyTransferRef"].validate(valid => {
+    if (valid) {
+      addTransferApply(applyTransferForm.value).then(() => {
+        proxy.$modal.msgSuccess("申请提交成功，等待审批")
+        applyTransferOpen.value = false
+      })
+    }
+  })
 }
 
 function goTransferRecord() {
