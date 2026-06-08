@@ -18,10 +18,17 @@ import com.ruoyi.common.utils.bean.BeanValidators;
 import com.ruoyi.system.domain.SysClass;
 import com.ruoyi.system.domain.SysStudent;
 import com.ruoyi.system.domain.SysStudentTransferLog;
+import com.ruoyi.system.domain.SysTransferApply;
 import com.ruoyi.system.domain.vo.SysStudentClassStat;
+import com.ruoyi.system.domain.vo.SysStudentProfileClassVo;
+import com.ruoyi.system.domain.vo.SysStudentProfileTransferApplyVo;
+import com.ruoyi.system.domain.vo.SysStudentProfileTransferLogVo;
+import com.ruoyi.system.domain.vo.SysStudentProfileVo;
 import com.ruoyi.system.domain.vo.SysStudentTransferDto;
 import com.ruoyi.system.mapper.SysClassMapper;
 import com.ruoyi.system.mapper.SysStudentMapper;
+import com.ruoyi.system.mapper.SysStudentTransferLogMapper;
+import com.ruoyi.system.mapper.SysTransferApplyMapper;
 import com.ruoyi.system.service.ISysStudentService;
 import com.ruoyi.system.service.ISysStudentTransferLogService;
 
@@ -45,6 +52,12 @@ public class SysStudentServiceImpl implements ISysStudentService
     private ISysStudentTransferLogService transferLogService;
 
     @Autowired
+    private SysStudentTransferLogMapper studentTransferLogMapper;
+
+    @Autowired
+    private SysTransferApplyMapper transferApplyMapper;
+
+    @Autowired
     protected Validator validator;
 
     /**
@@ -57,6 +70,42 @@ public class SysStudentServiceImpl implements ISysStudentService
     public SysStudent selectStudentByStudentId(Long studentId)
     {
         return studentMapper.selectStudentByStudentId(studentId);
+    }
+
+    /**
+     * 查询学生完整档案
+     *
+     * @param studentId 学生ID
+     * @return 学生完整档案
+     */
+    @Override
+    public SysStudentProfileVo selectStudentProfileByStudentId(Long studentId)
+    {
+        // 第一步先查学生主表，确认学生存在，同时拿到后续查询班级所需的 classId。
+        SysStudent student = studentMapper.selectStudentByStudentId(studentId);
+        if (student == null)
+        {
+            throw new ServiceException("学生不存在");
+        }
+
+        // 使用 VO 返回页面需要的聚合数据，避免把多个数据库实体直接暴露给前端。
+        SysStudentProfileVo profile = new SysStudentProfileVo();
+        profile.setStudentId(student.getStudentId());
+        profile.setStudentNo(student.getStudentNo());
+        profile.setStudentName(student.getStudentName());
+        profile.setIdCard(student.getIdCard());
+        profile.setAge(student.getAge());
+        profile.setGender(student.getGender());
+        profile.setPhoto(student.getPhoto());
+        profile.setRemark(student.getRemark());
+        // 当前班级信息来自班级表，最近申请和最近日志来自转班相关表。
+        profile.setCurrentClassInfo(buildClassInfo(student.getClassId()));
+        profile.setTransferCount(studentTransferLogMapper.countStudentTransferLogByStudentId(studentId));
+        profile.setRecentTransferApplies(buildTransferApplyVoList(
+                transferApplyMapper.selectRecentTransferApplyListByStudentId(studentId)));
+        profile.setRecentTransferLogs(buildTransferLogVoList(
+                studentTransferLogMapper.selectRecentStudentTransferLogListByStudentId(studentId)));
+        return profile;
     }
 
     /**
@@ -306,6 +355,92 @@ public class SysStudentServiceImpl implements ISysStudentService
             .filter(StringUtils::isNotEmpty)
             .distinct()
             .collect(Collectors.joining(", "));
+    }
+
+    private SysStudentProfileClassVo buildClassInfo(Long classId)
+    {
+        if (classId == null)
+        {
+            return null;
+        }
+        // 学生表只保存 classId，这里再查班级表补全班级名称、班主任、教室等展示信息。
+        SysClass sysClass = classMapper.selectClassByClassId(classId);
+        if (sysClass == null)
+        {
+            return null;
+        }
+        SysStudentProfileClassVo classInfo = new SysStudentProfileClassVo();
+        classInfo.setClassId(sysClass.getClassId());
+        classInfo.setGrade(sysClass.getGrade());
+        classInfo.setClassName(sysClass.getClassName());
+        classInfo.setTeacherName(sysClass.getTeacherName());
+        classInfo.setClassroom(sysClass.getClassroom());
+        classInfo.setMaxCount(sysClass.getMaxCount());
+        return classInfo;
+    }
+
+    private List<SysStudentProfileTransferApplyVo> buildTransferApplyVoList(List<SysTransferApply> applyList)
+    {
+        return applyList.stream().map(this::buildTransferApplyVo).collect(Collectors.toList());
+    }
+
+    private SysStudentProfileTransferApplyVo buildTransferApplyVo(SysTransferApply apply)
+    {
+        // 申请表字段较多，这里只挑完整档案弹窗需要展示的字段。
+        SysStudentProfileTransferApplyVo vo = new SysStudentProfileTransferApplyVo();
+        vo.setApplyId(apply.getApplyId());
+        vo.setBeforeGrade(apply.getBeforeGrade());
+        vo.setBeforeClassName(apply.getBeforeClassName());
+        vo.setAfterGrade(apply.getAfterGrade());
+        vo.setAfterClassName(apply.getAfterClassName());
+        vo.setApplyReason(apply.getApplyReason());
+        vo.setApplyBy(apply.getApplyBy());
+        vo.setApplyTime(apply.getApplyTime());
+        vo.setStatus(apply.getStatus());
+        vo.setStatusLabel(buildTransferApplyStatusLabel(apply.getStatus()));
+        vo.setRejectReason(apply.getRejectReason());
+        return vo;
+    }
+
+    private List<SysStudentProfileTransferLogVo> buildTransferLogVoList(List<SysStudentTransferLog> transferLogs)
+    {
+        return transferLogs.stream().map(this::buildTransferLogVo).collect(Collectors.toList());
+    }
+
+    private SysStudentProfileTransferLogVo buildTransferLogVo(SysStudentTransferLog transferLog)
+    {
+        // 转班日志用于展示学生历史流转，不需要把 student_ids 等批量字段返回给页面。
+        SysStudentProfileTransferLogVo vo = new SysStudentProfileTransferLogVo();
+        vo.setTransferId(transferLog.getTransferId());
+        vo.setBeforeGrade(transferLog.getBeforeGrade());
+        vo.setBeforeClassName(transferLog.getBeforeClassName());
+        vo.setAfterGrade(transferLog.getAfterGrade());
+        vo.setAfterClassName(transferLog.getAfterClassName());
+        vo.setRemark(transferLog.getRemark());
+        vo.setTransferBy(transferLog.getTransferBy());
+        vo.setTransferTime(transferLog.getTransferTime());
+        return vo;
+    }
+
+    private String buildTransferApplyStatusLabel(String status)
+    {
+        if ("0".equals(status))
+        {
+            return "待班主任审批";
+        }
+        if ("1".equals(status))
+        {
+            return "待教务处审批";
+        }
+        if ("2".equals(status))
+        {
+            return "已通过";
+        }
+        if ("3".equals(status))
+        {
+            return "已拒绝";
+        }
+        return "未知状态";
     }
 
     /**

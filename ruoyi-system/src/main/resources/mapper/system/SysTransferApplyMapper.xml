@@ -81,6 +81,14 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by a.apply_time desc
     </select>
 
+    <select id="selectRecentTransferApplyListByStudentId" parameterType="Long" resultMap="SysTransferApplyResult">
+        <include refid="selectTransferApplyVo"/>
+        <!-- 转班申请是一人一条申请记录，所以这里可以直接按 student_id 精确查询。 -->
+        where a.student_id = #{studentId}
+        order by a.apply_time desc, a.apply_id desc
+        limit 5
+    </select>
+
     <select id="selectMyApproveList" parameterType="SysTransferApply" resultMap="SysTransferApplyResult">
         <include refid="selectTransferApplyVo"/>
         <where>

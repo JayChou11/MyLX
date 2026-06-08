@@ -15,6 +15,7 @@ import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.system.domain.SysStudent;
 import com.ruoyi.system.domain.vo.SysStudentListVo;
+import com.ruoyi.system.domain.vo.SysStudentProfileVo;
 import com.ruoyi.system.domain.vo.SysStudentTransferDto;
 import com.ruoyi.system.service.ISysGradeUpgradeService;
 import com.ruoyi.system.service.ISysStudentService;
@@ -137,6 +138,18 @@ public class SysStudentController extends BaseController
     public AjaxResult getInfo(@PathVariable("studentId") Long studentId)
     {
         return success(studentService.selectStudentByStudentId(studentId));
+    }
+
+    /**
+     * 获取学生完整档案
+     */
+    @PreAuthorize("@ss.hasPermi('system:student:query')")
+    @GetMapping("/profile/{studentId}")
+    public AjaxResult getProfile(@PathVariable("studentId") Long studentId)
+    {
+        // 完整档案不是单表详情，需要交给 Service 组装学生、班级、转班申请和转班记录。
+        SysStudentProfileVo profile = studentService.selectStudentProfileByStudentId(studentId);
+        return success(profile);
     }
 
     /**

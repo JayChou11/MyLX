@@ -3,6 +3,7 @@ package com.ruoyi.system.service;
 import java.util.List;
 import com.ruoyi.system.domain.SysStudent;
 import com.ruoyi.system.domain.vo.SysStudentClassStat;
+import com.ruoyi.system.domain.vo.SysStudentProfileVo;
 import com.ruoyi.system.domain.vo.SysStudentTransferDto;
 
 /**
@@ -19,6 +20,14 @@ public interface ISysStudentService
      * @return 学生信息
      */
     public SysStudent selectStudentByStudentId(Long studentId);
+
+    /**
+     * 查询学生完整档案
+     *
+     * @param studentId 学生ID
+     * @return 学生完整档案
+     */
+    public SysStudentProfileVo selectStudentProfileByStudentId(Long studentId);
 
     /**
      * 查询学生信息列表

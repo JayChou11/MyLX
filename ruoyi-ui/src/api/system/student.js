@@ -17,6 +17,14 @@ export function getStudent(studentId) {
   })
 }
 
+// 查询学生完整档案
+export function getStudentProfile(studentId) {
+  return request({
+    url: '/system/student/profile/' + studentId,
+    method: 'get'
+  })
+}
+
 // 查询学生班级统计
 export function listStudentClassStats() {
   return request({

@@ -14,5 +14,21 @@ public interface SysStudentTransferLogMapper
 
     public List<SysStudentTransferLog> selectStudentTransferLogList(SysStudentTransferLog studentTransferLog);
 
+    /**
+     * 查询某个学生最近的转班记录
+     *
+     * @param studentId 学生ID
+     * @return 转班记录集合
+     */
+    public List<SysStudentTransferLog> selectRecentStudentTransferLogListByStudentId(Long studentId);
+
+    /**
+     * 统计某个学生累计出现过的转班记录条数
+     *
+     * @param studentId 学生ID
+     * @return 转班次数
+     */
+    public int countStudentTransferLogByStudentId(Long studentId);
+
     public int insertStudentTransferLog(SysStudentTransferLog studentTransferLog);
 }

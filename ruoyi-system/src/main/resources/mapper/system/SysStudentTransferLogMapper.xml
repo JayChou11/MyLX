@@ -50,6 +50,21 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by transfer_time desc, transfer_id desc
     </select>
 
+    <select id="selectRecentStudentTransferLogListByStudentId" parameterType="Long" resultMap="SysStudentTransferLogResult">
+        <include refid="selectStudentTransferLogVo"/>
+        <!-- student_ids 保存的是逗号分隔的多个学生ID，find_in_set 用来判断当前学生是否在这批ID里。 -->
+        where find_in_set(#{studentId}, student_ids)
+        order by transfer_time desc, transfer_id desc
+        limit 5
+    </select>
+
+    <select id="countStudentTransferLogByStudentId" parameterType="Long" resultType="Integer">
+        select count(1)
+        from sys_student_transfer_log
+        <!-- 统计这个学生出现在多少条转班日志中，也就是累计转班次数。 -->
+        where find_in_set(#{studentId}, student_ids)
+    </select>
+
     <insert id="insertStudentTransferLog" parameterType="SysStudentTransferLog" useGeneratedKeys="true" keyProperty="transferId">
         insert into sys_student_transfer_log (
             student_ids,

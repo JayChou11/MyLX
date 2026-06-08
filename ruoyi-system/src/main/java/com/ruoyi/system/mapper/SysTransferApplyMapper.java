@@ -27,6 +27,14 @@ public interface SysTransferApplyMapper
     public List<SysTransferApply> selectTransferApplyList(SysTransferApply transferApply);
 
     /**
+     * 查询某个学生最近的转班申请
+     *
+     * @param studentId 学生ID
+     * @return 转班申请集合
+     */
+    public List<SysTransferApply> selectRecentTransferApplyListByStudentId(Long studentId);
+
+    /**
      * 查询待我审批的申请列表
      *
      * @param transferApply 查询参数（包含approveLevel和approveBy）

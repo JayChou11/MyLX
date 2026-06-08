@@ -92,7 +92,7 @@
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
-    <el-table v-loading="loading" :data="studentList" @selection-change="handleSelectionChange">
+    <el-table v-loading="loading" :data="studentList" @selection-change="handleSelectionChange" @row-dblclick="handleProfile">
       <el-table-column type="selection" width="55" align="center" />
       <el-table-column label="学生ID" align="center" prop="studentId" width="90" />
       <el-table-column label="学号" align="center" prop="studentNo" min-width="130" />
@@ -339,12 +339,84 @@
         </div>
       </template>
     </el-dialog>
+
+    <el-dialog title="学生完整档案" v-model="profileOpen" width="960px" append-to-body>
+      <div v-loading="profileLoading">
+        <el-descriptions :column="3" border>
+          <el-descriptions-item label="学号">{{ profileData.studentNo || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="姓名">{{ profileData.studentName || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="性别">
+            <dict-tag :options="sys_user_sex" :value="profileData.gender" />
+          </el-descriptions-item>
+          <el-descriptions-item label="身份证号">{{ profileData.idCard || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="年龄">{{ profileData.age ?? "-" }}</el-descriptions-item>
+          <el-descriptions-item label="累计转班次数">{{ profileData.transferCount ?? 0 }}</el-descriptions-item>
+          <el-descriptions-item label="当前年级">{{ profileData.currentClassInfo?.grade || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="当前班级">{{ profileData.currentClassInfo?.className || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="班主任">{{ profileData.currentClassInfo?.teacherName || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="教室">{{ profileData.currentClassInfo?.classroom || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="人数上限">{{ profileData.currentClassInfo?.maxCount ?? "-" }}</el-descriptions-item>
+          <el-descriptions-item label="备注">{{ profileData.remark || "-" }}</el-descriptions-item>
+        </el-descriptions>
+
+        <div class="profile-section">
+          <h4>最近转班申请</h4>
+          <el-table :data="profileData.recentTransferApplies || []" size="small">
+            <el-table-column label="申请时间" min-width="160">
+              <template #default="scope">
+                <span>{{ parseTime(scope.row.applyTime) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="原班级" min-width="140">
+              <template #default="scope">
+                <span>{{ scope.row.beforeGrade }} {{ scope.row.beforeClassName }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="目标班级" min-width="140">
+              <template #default="scope">
+                <span>{{ scope.row.afterGrade }} {{ scope.row.afterClassName }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" prop="statusLabel" min-width="120" />
+            <el-table-column label="申请原因" prop="applyReason" min-width="180" show-overflow-tooltip />
+          </el-table>
+          <el-empty v-if="!(profileData.recentTransferApplies || []).length" description="暂无转班申请" />
+        </div>
+
+        <div class="profile-section">
+          <h4>最近转班记录</h4>
+          <el-table :data="profileData.recentTransferLogs || []" size="small">
+            <el-table-column label="转班时间" min-width="160">
+              <template #default="scope">
+                <span>{{ parseTime(scope.row.transferTime) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="转班前" min-width="140">
+              <template #default="scope">
+                <span>{{ scope.row.beforeGrade }} {{ scope.row.beforeClassName }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="转班后" min-width="140">
+              <template #default="scope">
+                <span>{{ scope.row.afterGrade }} {{ scope.row.afterClassName }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作人" prop="transferBy" min-width="120" />
+            <el-table-column label="备注" prop="remark" min-width="180" show-overflow-tooltip />
+          </el-table>
+          <el-empty v-if="!(profileData.recentTransferLogs || []).length" description="暂无转班记录" />
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="profileOpen = false">关 闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup name="Student">
 import ExcelImportDialog from "@/components/ExcelImportDialog"
-import { listStudent, getStudent, delStudent, addStudent, updateStudent, listStudentClassStats, transferStudentClass, refreshClassStatsCache, upgradeGrade } from "@/api/system/student"
+import { listStudent, getStudent, getStudentProfile, delStudent, addStudent, updateStudent, listStudentClassStats, transferStudentClass, refreshClassStatsCache, upgradeGrade } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
 import { addTransferApply } from "@/api/system/transferApply"
 
@@ -355,6 +427,8 @@ const studentList = ref([])
 const open = ref(false)
 const transferOpen = ref(false)
 const applyTransferOpen = ref(false)
+const profileOpen = ref(false)
+const profileLoading = ref(false)
 const loading = ref(true)
 const showSearch = ref(true)
 const ids = ref([])
@@ -365,6 +439,11 @@ const title = ref("")
 const classStatsOpen = ref(false)
 const classStatsLoading = ref(false)
 const classStatsList = ref([])
+const profileData = ref({
+  currentClassInfo: {},
+  recentTransferApplies: [],
+  recentTransferLogs: []
+})
 
 // 班级下拉选项
 const classOptions = ref([])
@@ -640,6 +719,21 @@ function goTransferRecord() {
   proxy.$router.push("/system/student/transferRecord")
 }
 
+function handleProfile(row) {
+  // 双击学生行时打开完整档案弹窗，并按当前行的 studentId 到后端查询聚合数据。
+  profileLoading.value = true
+  profileOpen.value = true
+  getStudentProfile(row.studentId).then(response => {
+    profileData.value = response.data || {
+      currentClassInfo: {},
+      recentTransferApplies: [],
+      recentTransferLogs: []
+    }
+  }).finally(() => {
+    profileLoading.value = false
+  })
+}
+
 function handleUpdate(row) {
   reset()
   const studentId = row.studentId || ids.value[0]
@@ -737,5 +831,15 @@ getList()
 .tip-text {
   margin-bottom: 16px;
   color: #606266;
+}
+
+.profile-section {
+  margin-top: 20px;
+}
+
+.profile-section h4 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #303133;
 }
 </style>
