@@ -1,6 +1,8 @@
 package com.ruoyi.system.service.impl;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 import jakarta.validation.Validator;
@@ -23,6 +25,7 @@ import com.ruoyi.system.domain.vo.SysStudentClassStat;
 import com.ruoyi.system.domain.vo.SysStudentProfileClassVo;
 import com.ruoyi.system.domain.vo.SysStudentProfileTransferApplyVo;
 import com.ruoyi.system.domain.vo.SysStudentProfileTransferLogVo;
+import com.ruoyi.system.domain.vo.SysStudentProfileTimelineVo;
 import com.ruoyi.system.domain.vo.SysStudentProfileVo;
 import com.ruoyi.system.domain.vo.SysStudentTransferDto;
 import com.ruoyi.system.mapper.SysClassMapper;
@@ -87,6 +90,9 @@ public class SysStudentServiceImpl implements ISysStudentService
         {
             throw new ServiceException("学生不存在");
         }
+        List<SysTransferApply> recentApplyList = transferApplyMapper.selectRecentTransferApplyListByStudentId(studentId);
+        List<SysStudentTransferLog> recentTransferLogList =
+                studentTransferLogMapper.selectRecentStudentTransferLogListByStudentId(studentId);
 
         // 使用 VO 返回页面需要的聚合数据，避免把多个数据库实体直接暴露给前端。
         SysStudentProfileVo profile = new SysStudentProfileVo();
@@ -101,10 +107,9 @@ public class SysStudentServiceImpl implements ISysStudentService
         // 当前班级信息来自班级表，最近申请和最近日志来自转班相关表。
         profile.setCurrentClassInfo(buildClassInfo(student.getClassId()));
         profile.setTransferCount(studentTransferLogMapper.countStudentTransferLogByStudentId(studentId));
-        profile.setRecentTransferApplies(buildTransferApplyVoList(
-                transferApplyMapper.selectRecentTransferApplyListByStudentId(studentId)));
-        profile.setRecentTransferLogs(buildTransferLogVoList(
-                studentTransferLogMapper.selectRecentStudentTransferLogListByStudentId(studentId)));
+        profile.setRecentTransferApplies(buildTransferApplyVoList(recentApplyList));
+        profile.setRecentTransferLogs(buildTransferLogVoList(recentTransferLogList));
+        profile.setTimelines(buildTimelineList(student, recentApplyList, recentTransferLogList));
         return profile;
     }
 
@@ -420,6 +425,75 @@ public class SysStudentServiceImpl implements ISysStudentService
         vo.setTransferBy(transferLog.getTransferBy());
         vo.setTransferTime(transferLog.getTransferTime());
         return vo;
+    }
+
+    private List<SysStudentProfileTimelineVo> buildTimelineList(SysStudent student,
+            List<SysTransferApply> applyList, List<SysStudentTransferLog> transferLogs)
+    {
+        List<SysStudentProfileTimelineVo> timelines = new ArrayList<>();
+
+        timelines.add(buildTimelineVo("CREATE", "新增学生", student.getCreateBy(),
+                "创建学生：" + student.getStudentName(), student.getCreateTime()));
+        if (student.getUpdateTime() != null)
+        {
+            timelines.add(buildTimelineVo("UPDATE", "修改学生", student.getUpdateBy(),
+                    "修改学生：" + student.getStudentName(), student.getUpdateTime()));
+        }
+
+        for (SysTransferApply apply : applyList)
+        {
+            timelines.add(buildTimelineVo("APPLY", "提交转班申请", apply.getApplyBy(),
+                    buildTransferDesc(apply.getBeforeGrade(), apply.getBeforeClassName(),
+                            apply.getAfterGrade(), apply.getAfterClassName()), apply.getApplyTime()));
+        }
+        for (SysStudentTransferLog transferLog : transferLogs)
+        {
+            timelines.add(buildTimelineVo("TRANSFER", "完成转班", transferLog.getTransferBy(),
+                    buildTransferDesc(transferLog.getBeforeGrade(), transferLog.getBeforeClassName(),
+                            transferLog.getAfterGrade(), transferLog.getAfterClassName()), transferLog.getTransferTime()));
+        }
+
+        timelines.sort((left, right) -> compareDateDesc(left.getEventTime(), right.getEventTime()));
+        return timelines;
+    }
+
+    private SysStudentProfileTimelineVo buildTimelineVo(String eventType, String eventTitle,
+            String operatorName, String eventDesc, Date eventTime)
+    {
+        SysStudentProfileTimelineVo vo = new SysStudentProfileTimelineVo();
+        vo.setEventType(eventType);
+        vo.setEventTitle(eventTitle);
+        vo.setOperatorName(operatorName);
+        vo.setEventDesc(eventDesc);
+        vo.setEventTime(eventTime);
+        return vo;
+    }
+
+    private String buildTransferDesc(String beforeGrade, String beforeClassName, String afterGrade, String afterClassName)
+    {
+        return "从 " + buildClassDesc(beforeGrade, beforeClassName) + " 转到 " + buildClassDesc(afterGrade, afterClassName);
+    }
+
+    private String buildClassDesc(String grade, String className)
+    {
+        return StringUtils.nvl(grade, "") + StringUtils.nvl(className, "");
+    }
+
+    private int compareDateDesc(Date left, Date right)
+    {
+        if (left == null && right == null)
+        {
+            return 0;
+        }
+        if (left == null)
+        {
+            return 1;
+        }
+        if (right == null)
+        {
+            return -1;
+        }
+        return right.compareTo(left);
     }
 
     private String buildTransferApplyStatusLabel(String status)

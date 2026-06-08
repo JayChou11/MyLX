@@ -360,6 +360,23 @@
         </el-descriptions>
 
         <div class="profile-section">
+          <h4>操作时间线</h4>
+          <el-timeline v-if="(profileData.timelines || []).length">
+            <el-timeline-item
+              v-for="item in profileData.timelines"
+              :key="item.eventType + item.eventTime + item.eventTitle"
+              :timestamp="parseTime(item.eventTime)"
+              placement="top"
+            >
+              <div class="timeline-title">{{ item.eventTitle }}</div>
+              <div class="timeline-desc">{{ item.eventDesc || "-" }}</div>
+              <div class="timeline-operator">操作人：{{ item.operatorName || "-" }}</div>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-else description="暂无操作时间线" />
+        </div>
+
+        <div class="profile-section">
           <h4>最近转班申请</h4>
           <el-table :data="profileData.recentTransferApplies || []" size="small">
             <el-table-column label="申请时间" min-width="160">
@@ -442,7 +459,8 @@ const classStatsList = ref([])
 const profileData = ref({
   currentClassInfo: {},
   recentTransferApplies: [],
-  recentTransferLogs: []
+  recentTransferLogs: [],
+  timelines: []
 })
 
 // 班级下拉选项
@@ -727,7 +745,8 @@ function handleProfile(row) {
     profileData.value = response.data || {
       currentClassInfo: {},
       recentTransferApplies: [],
-      recentTransferLogs: []
+      recentTransferLogs: [],
+      timelines: []
     }
   }).finally(() => {
     profileLoading.value = false
@@ -841,5 +860,21 @@ getList()
   margin: 0 0 12px;
   font-size: 15px;
   color: #303133;
+}
+
+.timeline-title {
+  font-weight: 600;
+  color: #303133;
+}
+
+.timeline-desc {
+  margin-top: 4px;
+  color: #606266;
+}
+
+.timeline-operator {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
 }
 </style>

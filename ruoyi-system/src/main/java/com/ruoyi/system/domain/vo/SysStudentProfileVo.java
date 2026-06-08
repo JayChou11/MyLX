@@ -33,6 +33,8 @@ public class SysStudentProfileVo
 
     private List<SysStudentProfileTransferLogVo> recentTransferLogs;
 
+    private List<SysStudentProfileTimelineVo> timelines;
+
     public Long getStudentId()
     {
         return studentId;
@@ -151,5 +153,15 @@ public class SysStudentProfileVo
     public void setRecentTransferLogs(List<SysStudentProfileTransferLogVo> recentTransferLogs)
     {
         this.recentTransferLogs = recentTransferLogs;
+    }
+
+    public List<SysStudentProfileTimelineVo> getTimelines()
+    {
+        return timelines;
+    }
+
+    public void setTimelines(List<SysStudentProfileTimelineVo> timelines)
+    {
+        this.timelines = timelines;
     }
 }
