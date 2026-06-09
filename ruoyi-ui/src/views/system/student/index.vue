@@ -278,11 +278,20 @@
     />
 
     <!-- 班级统计对话框 -->
-    <el-dialog title="班级统计" v-model="classStatsOpen" width="780px" append-to-body>
+    <el-dialog title="班级统计" v-model="classStatsOpen" width="980px" append-to-body>
       <el-table v-loading="classStatsLoading" :data="classStatsList">
         <el-table-column label="年级" align="center" prop="grade" />
         <el-table-column label="班级" align="center" prop="className" />
         <el-table-column label="学生人数" align="center" prop="studentCount" />
+        <el-table-column label="人数上限" align="center" prop="maxCount" />
+        <el-table-column label="剩余名额" align="center" prop="remainingCount" />
+        <el-table-column label="容量状态" align="center" min-width="110">
+          <template #default="scope">
+            <el-tag :type="getCapacityTagType(scope.row.capacityStatus)">
+              {{ scope.row.capacityStatusLabel }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="男生人数" align="center" prop="maleCount" />
         <el-table-column label="女生人数" align="center" prop="femaleCount" />
         <el-table-column label="未知人数" align="center" prop="unknownCount" />
@@ -651,6 +660,20 @@ function handleRefreshClassStats() {
   }).finally(() => {
     classStatsLoading.value = false
   })
+}
+
+// 后端返回容量状态编码，前端只负责映射成不同颜色的标签。
+function getCapacityTagType(status) {
+  if (status === "over") {
+    return "danger"
+  }
+  if (status === "full") {
+    return "warning"
+  }
+  if (status === "warning") {
+    return "primary"
+  }
+  return "success"
 }
 
 function handleTransferClass() {

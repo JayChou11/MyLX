@@ -146,7 +146,9 @@ public class SysStudentServiceImpl implements ISysStudentService
     @Cacheable(value = "studentClassStat", key = "'all'")
     public List<SysStudentClassStat> selectStudentClassStatList()
     {
-        return studentMapper.selectStudentClassStatList();
+        List<SysStudentClassStat> classStatList = studentMapper.selectStudentClassStatList();
+        classStatList.forEach(this::fillClassCapacityStatus);
+        return classStatList;
     }
 
     /**
@@ -175,6 +177,8 @@ public class SysStudentServiceImpl implements ISysStudentService
         {
             throw new ServiceException("未查询到需要调班的学生");
         }
+        // 更新学生班级前先校验目标班级容量，直接调班和审批通过调班都会走到这里。
+        checkTransferClassCapacity(targetClass, beforeList);
         int rows = studentMapper.transferStudentClass(transferDto);
         if (rows <= 0)
         {
@@ -339,6 +343,36 @@ public class SysStudentServiceImpl implements ISysStudentService
         return successMsg.toString();
     }
 
+    /**
+     * 校验目标班级是否还有足够名额接收本次转入学生。
+     *
+     * @param targetClass 目标班级
+     * @param beforeList 调班前的学生列表
+     */
+    private void checkTransferClassCapacity(SysClass targetClass, List<SysStudent> beforeList)
+    {
+        Integer maxCount = targetClass.getMaxCount();
+        if (maxCount == null)
+        {
+            return;
+        }
+        // 只有原来不在目标班级的学生，才会真正占用目标班级的新名额。
+        long transferCount = beforeList.stream()
+            .filter(student -> !targetClass.getClassId().equals(student.getClassId()))
+            .count();
+        if (transferCount == 0)
+        {
+            return;
+        }
+        int currentCount = classMapper.countStudentByClassId(targetClass.getClassId());
+        int remainingCount = maxCount - currentCount;
+        if (remainingCount < transferCount)
+        {
+            throw new ServiceException("目标班级剩余名额不足，当前剩余 " + Math.max(remainingCount, 0)
+                    + " 个名额，本次需要转入 " + transferCount + " 人");
+        }
+    }
+
     private SysStudentTransferLog buildTransferLog(SysStudentTransferDto transferDto, List<SysStudent> beforeList, SysClass targetClass)
     {
         SysStudentTransferLog transferLog = new SysStudentTransferLog();
@@ -494,6 +528,40 @@ public class SysStudentServiceImpl implements ISysStudentService
             return -1;
         }
         return right.compareTo(left);
+    }
+
+    /**
+     * 根据学生人数和班级人数上限，补充前端展示用的容量状态。
+     *
+     * @param classStat 班级统计信息
+     */
+    private void fillClassCapacityStatus(SysStudentClassStat classStat)
+    {
+        Long studentCount = StringUtils.nvl(classStat.getStudentCount(), 0L);
+        Long maxCount = StringUtils.nvl(classStat.getMaxCount(), 0L);
+        Long remainingCount = maxCount - studentCount;
+        classStat.setRemainingCount(remainingCount);
+
+        if (remainingCount < 0)
+        {
+            classStat.setCapacityStatus("over");
+            classStat.setCapacityStatusLabel("超员");
+        }
+        else if (remainingCount == 0)
+        {
+            classStat.setCapacityStatus("full");
+            classStat.setCapacityStatusLabel("已满员");
+        }
+        else if (remainingCount <= 5)
+        {
+            classStat.setCapacityStatus("warning");
+            classStat.setCapacityStatusLabel("即将满员");
+        }
+        else
+        {
+            classStat.setCapacityStatus("normal");
+            classStat.setCapacityStatusLabel("正常");
+        }
     }
 
     private String buildTransferApplyStatusLabel(String status)

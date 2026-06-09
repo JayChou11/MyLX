@@ -19,6 +19,18 @@ public class SysStudentClassStat
     /** 学生人数 */
     private Long studentCount;
 
+    /** 人数上限 */
+    private Long maxCount;
+
+    /** 剩余名额 */
+    private Long remainingCount;
+
+    /** 容量状态 */
+    private String capacityStatus;
+
+    /** 容量状态名称 */
+    private String capacityStatusLabel;
+
     /** 男生人数 */
     private Long maleCount;
 
@@ -66,6 +78,46 @@ public class SysStudentClassStat
     public void setStudentCount(Long studentCount)
     {
         this.studentCount = studentCount;
+    }
+
+    public Long getMaxCount()
+    {
+        return maxCount;
+    }
+
+    public void setMaxCount(Long maxCount)
+    {
+        this.maxCount = maxCount;
+    }
+
+    public Long getRemainingCount()
+    {
+        return remainingCount;
+    }
+
+    public void setRemainingCount(Long remainingCount)
+    {
+        this.remainingCount = remainingCount;
+    }
+
+    public String getCapacityStatus()
+    {
+        return capacityStatus;
+    }
+
+    public void setCapacityStatus(String capacityStatus)
+    {
+        this.capacityStatus = capacityStatus;
+    }
+
+    public String getCapacityStatusLabel()
+    {
+        return capacityStatusLabel;
+    }
+
+    public void setCapacityStatusLabel(String capacityStatusLabel)
+    {
+        this.capacityStatusLabel = capacityStatusLabel;
     }
 
     public Long getMaleCount()

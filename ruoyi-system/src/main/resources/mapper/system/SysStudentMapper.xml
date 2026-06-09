@@ -78,17 +78,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         order by s.student_id desc
     </select>
 
+    <!-- 以班级表为主表，保证没有学生的班级也能出现在统计结果中 -->
     <select id="selectStudentClassStatList" resultType="com.ruoyi.system.domain.vo.SysStudentClassStat">
         select c.grade,
                c.class_name as className,
                c.class_id as classId,
-               count(1) as studentCount,
+               c.max_count as maxCount,
+               count(s.student_id) as studentCount,
                sum(case when s.gender = '0' then 1 else 0 end) as maleCount,
                sum(case when s.gender = '1' then 1 else 0 end) as femaleCount,
                sum(case when s.gender = '2' then 1 else 0 end) as unknownCount
-        from sys_student s
-        left join sys_class c on s.class_id = c.class_id
-        group by c.grade, c.class_name, c.class_id
+        from sys_class c
+        left join sys_student s on s.class_id = c.class_id
+        group by c.grade, c.class_name, c.class_id, c.max_count
         order by c.grade asc, c.class_name asc
     </select>
 
