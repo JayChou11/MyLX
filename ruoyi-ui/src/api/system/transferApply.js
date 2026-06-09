@@ -45,6 +45,14 @@ export function approveTransferApply(data) {
 }
 
 // 删除转班申请
+// 撤回转班申请
+export function cancelTransferApply(applyId) {
+  return request({
+    url: '/system/student/transferApply/cancel/' + applyId,
+    method: 'put'
+  })
+}
+
 export function delTransferApply(applyIds) {
   return request({
     url: '/system/student/transferApply/' + applyIds,

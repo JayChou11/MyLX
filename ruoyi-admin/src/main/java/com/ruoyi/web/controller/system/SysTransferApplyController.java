@@ -98,6 +98,17 @@ public class SysTransferApplyController extends BaseController
     }
 
     /**
+     * 撤回转班申请
+     */
+    @PreAuthorize("@ss.hasPermi('system:student:transferApprove:cancel')")
+    @Log(title = "转班申请", businessType = BusinessType.UPDATE)
+    @PutMapping("/cancel/{applyId}")
+    public AjaxResult cancel(@PathVariable Long applyId)
+    {
+        return toAjax(transferApplyService.cancelTransferApply(applyId, getUsername()));
+    }
+
+    /**
      * 删除转班申请
      */
     @PreAuthorize("@ss.hasPermi('system:student:transferApprove:remove')")

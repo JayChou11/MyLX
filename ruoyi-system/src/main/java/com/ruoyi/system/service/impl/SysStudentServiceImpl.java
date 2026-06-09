@@ -582,6 +582,10 @@ public class SysStudentServiceImpl implements ISysStudentService
         {
             return "已拒绝";
         }
+        if ("4".equals(status))
+        {
+            return "已撤回";
+        }
         return "未知状态";
     }
 

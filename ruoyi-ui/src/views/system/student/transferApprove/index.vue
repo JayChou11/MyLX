@@ -11,6 +11,7 @@
           <el-option label="待教务处审批" value="1" />
           <el-option label="已通过" value="2" />
           <el-option label="已拒绝" value="3" />
+          <el-option label="已撤回" value="4" />
         </el-select>
       </el-form-item>
       <el-form-item label="申请时间" style="width: 308px">
@@ -66,6 +67,7 @@
           <el-tag v-else-if="scope.row.status === '1'" type="warning">待教务处审批</el-tag>
           <el-tag v-else-if="scope.row.status === '2'" type="success">已通过</el-tag>
           <el-tag v-else-if="scope.row.status === '3'" type="danger">已拒绝</el-tag>
+          <el-tag v-else-if="scope.row.status === '4'" type="info">已撤回</el-tag>
         </template>
       </el-table-column>
       <el-table-column label="申请时间" align="center" prop="applyTime" width="180">
@@ -77,6 +79,7 @@
         <template #default="scope">
           <el-button link type="primary" icon="View" @click="handleDetail(scope.row)">详情</el-button>
           <el-button link type="primary" icon="Check" @click="handleApprove(scope.row)" v-if="canApprove(scope.row)" v-hasPermi="['system:student:transferApprove:approve']">审批</el-button>
+          <el-button link type="warning" icon="RefreshLeft" @click="handleCancelApply(scope.row)" v-if="canCancel(scope.row)" v-hasPermi="['system:student:transferApprove:cancel']">撤回</el-button>
           <el-button link type="danger" icon="Delete" @click="handleDelete(scope.row)" v-if="canDelete(scope.row)" v-hasPermi="['system:student:transferApprove:remove']">删除</el-button>
         </template>
       </el-table-column>
@@ -135,6 +138,7 @@
           <el-tag v-else-if="detailData.status === '1'" type="warning">待教务处审批</el-tag>
           <el-tag v-else-if="detailData.status === '2'" type="success">已通过</el-tag>
           <el-tag v-else-if="detailData.status === '3'" type="danger">已拒绝</el-tag>
+          <el-tag v-else-if="detailData.status === '4'" type="info">已撤回</el-tag>
         </el-descriptions-item>
         <el-descriptions-item v-if="detailData.rejectReason" label="拒绝原因" :span="2">
           <span style="color: #f56c6c">{{ detailData.rejectReason }}</span>
@@ -187,7 +191,7 @@
 </template>
 
 <script setup name="TransferApprove">
-import { listTransferApply, getTransferApply, addTransferApply, approveTransferApply, delTransferApply, exportTransferApply } from '@/api/system/transferApply'
+import { listTransferApply, getTransferApply, addTransferApply, approveTransferApply, cancelTransferApply, delTransferApply, exportTransferApply } from '@/api/system/transferApply'
 import { listStudent } from '@/api/system/student'
 import { listClass } from '@/api/system/class'
 import useUserStore from '@/store/modules/user'
@@ -296,9 +300,18 @@ function canApprove(row) {
   return row.status === '1' && (isAdmin.value || isAcademicOffice.value)
 }
 
+/** 是否可以撤回 */
+function canCancel(row) {
+  const canOperateStatus = row.status === '0' || row.status === '1'
+  if (!canOperateStatus) {
+    return false
+  }
+  return isAdmin.value || row.applyBy === loginUserName.value
+}
+
 /** 是否可以删除 */
 function canDelete(row) {
-  const canOperateStatus = row.status === '0' || row.status === '3'
+  const canOperateStatus = row.status === '0' || row.status === '3' || row.status === '4'
   if (!canOperateStatus) {
     return false
   }
@@ -398,6 +411,16 @@ function submitApprove() {
       }).catch(() => {})
     }
   })
+}
+
+/** 撤回按钮操作 */
+function handleCancelApply(row) {
+  proxy.$modal.confirm('是否确认撤回转班申请编号为"' + row.applyId + '"的数据项？').then(function() {
+    return cancelTransferApply(row.applyId)
+  }).then(() => {
+    getList()
+    proxy.$modal.msgSuccess("撤回成功")
+  }).catch(() => {})
 }
 
 /** 删除按钮操作 */

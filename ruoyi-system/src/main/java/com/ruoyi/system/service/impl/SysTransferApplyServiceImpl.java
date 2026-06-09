@@ -208,9 +208,9 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
         }
 
         String currentStatus = transferApply.getStatus();
-        if ("2".equals(currentStatus) || "3".equals(currentStatus))
+        if ("2".equals(currentStatus) || "3".equals(currentStatus) || "4".equals(currentStatus))
         {
-            throw new ServiceException("该申请已审批完成，不能重复审批");
+            throw new ServiceException("该申请流程已结束，不能重复审批");
         }
 
         Integer approveLevel = null;
@@ -260,6 +260,28 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
             updateApply.setRejectReason(approveRemark);
         }
 
+        return transferApplyMapper.updateTransferApply(updateApply);
+    }
+
+    /**
+     * 撤回转班申请
+     *
+     * @param applyId 申请ID
+     * @param cancelBy 撤回人
+     * @return 结果
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int cancelTransferApply(Long applyId, String cancelBy)
+    {
+        SysTransferApply transferApply = transferApplyMapper.selectTransferApplyByApplyId(applyId);
+        validateCancelPermission(transferApply);
+        validateCancelStatus(transferApply);
+
+        SysTransferApply updateApply = new SysTransferApply();
+        updateApply.setApplyId(applyId);
+        updateApply.setStatus("4");
+        updateApply.setUpdateBy(cancelBy);
         return transferApplyMapper.updateTransferApply(updateApply);
     }
 
@@ -389,6 +411,24 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
         throw new ServiceException("只有申请人或教务处可以删除当前申请");
     }
 
+    /**
+     * 校验当前用户是否有权限撤回申请。
+     *
+     * @param transferApply 转班申请
+     */
+    private void validateCancelPermission(SysTransferApply transferApply)
+    {
+        if (transferApply == null)
+        {
+            throw new ServiceException("转班申请不存在");
+        }
+        if (SecurityUtils.isAdmin() || isApplyOwner(transferApply))
+        {
+            return;
+        }
+        throw new ServiceException("只有申请人本人可以撤回当前申请");
+    }
+
     private void validateApprovePermission(SysTransferApply transferApply, Integer approveLevel, String approveBy)
     {
         if (SecurityUtils.isAdmin())
@@ -425,9 +465,27 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
         {
             throw new ServiceException("转班申请不存在");
         }
-        if (!"0".equals(transferApply.getStatus()) && !"3".equals(transferApply.getStatus()))
+        if (!"0".equals(transferApply.getStatus()) && !"3".equals(transferApply.getStatus()) && !"4".equals(transferApply.getStatus()))
         {
-            throw new ServiceException("只有待班主任审批或已拒绝的申请才允许删除");
+            throw new ServiceException("只有待班主任审批、已拒绝或已撤回的申请才允许删除");
+        }
+    }
+
+    /**
+     * 校验当前申请状态是否允许撤回。
+     *
+     * @param transferApply 转班申请
+     */
+    private void validateCancelStatus(SysTransferApply transferApply)
+    {
+        if (transferApply == null)
+        {
+            throw new ServiceException("转班申请不存在");
+        }
+        // 只有流程尚未结束的申请可以撤回；已通过、已拒绝、已撤回都不能再次撤回。
+        if (!"0".equals(transferApply.getStatus()) && !"1".equals(transferApply.getStatus()))
+        {
+            throw new ServiceException("只有待审批的申请才允许撤回");
         }
     }
 

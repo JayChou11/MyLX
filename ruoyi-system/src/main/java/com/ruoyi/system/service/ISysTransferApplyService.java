@@ -61,6 +61,15 @@ public interface ISysTransferApplyService
      * @param applyId 申请ID
      * @return 结果
      */
+    /**
+     * 撤回转班申请
+     *
+     * @param applyId 申请ID
+     * @param cancelBy 撤回人
+     * @return 结果
+     */
+    public int cancelTransferApply(Long applyId, String cancelBy);
+
     public int deleteTransferApplyByApplyId(Long applyId);
 
     /**

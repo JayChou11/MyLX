@@ -65,8 +65,8 @@ public class SysTransferApply extends BaseEntity
     @Excel(name = "申请时间", width = 30, dateFormat = "yyyy-MM-dd HH:mm:ss")
     private Date applyTime;
 
-    /** 状态（0待班主任审批 1待教务处审批 2已通过 3已拒绝） */
-    @Excel(name = "状态", readConverterExp = "0=待班主任审批,1=待教务处审批,2=已通过,3=已拒绝")
+    /** 状态（0待班主任审批 1待教务处审批 2已通过 3已拒绝 4已撤回） */
+    @Excel(name = "状态", readConverterExp = "0=待班主任审批,1=待教务处审批,2=已通过,3=已拒绝,4=已撤回")
     private String status;
 
     /** 拒绝原因 */

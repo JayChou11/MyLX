@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `sys_transfer_apply` (
   `apply_reason` varchar(500) NOT NULL COMMENT '申请原因',
   `apply_by` varchar(64) NOT NULL COMMENT '申请人',
   `apply_time` datetime NOT NULL COMMENT '申请时间',
-  `status` char(1) NOT NULL DEFAULT '0' COMMENT '状态（0待班主任审批 1待教务处审批 2已通过 3已拒绝）',
+  `status` char(1) NOT NULL DEFAULT '0' COMMENT '状态（0待班主任审批 1待教务处审批 2已通过 3已拒绝 4已撤回）',
   `reject_reason` varchar(500) DEFAULT NULL COMMENT '拒绝原因',
   `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
   `create_time` datetime DEFAULT NULL COMMENT '创建时间',
@@ -57,7 +57,8 @@ VALUES
 (1, '待班主任审批', '0', 'transfer_apply_status', '', 'info', 'Y', '0', 'admin', NOW(), ''),
 (2, '待教务处审批', '1', 'transfer_apply_status', '', 'warning', 'N', '0', 'admin', NOW(), ''),
 (3, '已通过', '2', 'transfer_apply_status', '', 'success', 'N', '0', 'admin', NOW(), ''),
-(4, '已拒绝', '3', 'transfer_apply_status', '', 'danger', 'N', '0', 'admin', NOW(), '');
+(4, '已拒绝', '3', 'transfer_apply_status', '', 'danger', 'N', '0', 'admin', NOW(), ''),
+(5, '已撤回', '4', 'transfer_apply_status', '', 'info', 'N', '0', 'admin', NOW(), '');
 
 -- 4. 创建菜单
 SET @student_parent_id = (
@@ -115,7 +116,14 @@ WHERE NOT EXISTS (
 
 INSERT INTO sys_menu
 (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
-SELECT '转班审批导出', @parent_menu_id, 5, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:student:transferApprove:export', '#', 'admin', NOW(), 'admin', NOW(), ''
+SELECT '转班审批撤回', @parent_menu_id, 5, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:student:transferApprove:cancel', '#', 'admin', NOW(), 'admin', NOW(), ''
+WHERE NOT EXISTS (
+  SELECT 1 FROM sys_menu WHERE parent_id = @parent_menu_id AND perms = 'system:student:transferApprove:cancel'
+);
+
+INSERT INTO sys_menu
+(menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '转班审批导出', @parent_menu_id, 6, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:student:transferApprove:export', '#', 'admin', NOW(), 'admin', NOW(), ''
 WHERE NOT EXISTS (
   SELECT 1 FROM sys_menu WHERE parent_id = @parent_menu_id AND perms = 'system:student:transferApprove:export'
 );
@@ -162,6 +170,7 @@ WHERE parent_id = @parent_menu_id
     'system:student:transferApprove:query',
     'system:student:transferApprove:add',
     'system:student:transferApprove:approve',
+    'system:student:transferApprove:cancel',
     'system:student:transferApprove:remove'
   );
 
