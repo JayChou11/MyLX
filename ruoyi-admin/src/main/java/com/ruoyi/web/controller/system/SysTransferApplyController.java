@@ -109,6 +109,18 @@ public class SysTransferApplyController extends BaseController
     }
 
     /**
+     * 重新提交转班申请
+     */
+    @PreAuthorize("@ss.hasPermi('system:student:transferApprove:resubmit')")
+    @Log(title = "转班申请", businessType = BusinessType.UPDATE)
+    @PutMapping("/resubmit/{applyId}")
+    public AjaxResult resubmit(@PathVariable Long applyId, @Validated @RequestBody SysTransferApplyDto applyDto)
+    {
+        applyDto.setApplyBy(getUsername());
+        return toAjax(transferApplyService.resubmitTransferApply(applyId, applyDto));
+    }
+
+    /**
      * 删除转班申请
      */
     @PreAuthorize("@ss.hasPermi('system:student:transferApprove:remove')")

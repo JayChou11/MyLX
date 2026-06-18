@@ -53,6 +53,15 @@ export function cancelTransferApply(applyId) {
   })
 }
 
+// 重新提交转班申请
+export function resubmitTransferApply(applyId, data) {
+  return request({
+    url: '/system/student/transferApply/resubmit/' + applyId,
+    method: 'put',
+    data: data
+  })
+}
+
 export function delTransferApply(applyIds) {
   return request({
     url: '/system/student/transferApply/' + applyIds,

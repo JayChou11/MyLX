@@ -123,7 +123,14 @@ WHERE NOT EXISTS (
 
 INSERT INTO sys_menu
 (menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
-SELECT '转班审批导出', @parent_menu_id, 6, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:student:transferApprove:export', '#', 'admin', NOW(), 'admin', NOW(), ''
+SELECT '转班审批重新提交', @parent_menu_id, 6, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:student:transferApprove:resubmit', '#', 'admin', NOW(), 'admin', NOW(), ''
+WHERE NOT EXISTS (
+  SELECT 1 FROM sys_menu WHERE parent_id = @parent_menu_id AND perms = 'system:student:transferApprove:resubmit'
+);
+
+INSERT INTO sys_menu
+(menu_name, parent_id, order_num, path, component, query, route_name, is_frame, is_cache, menu_type, visible, status, perms, icon, create_by, create_time, update_by, update_time, remark)
+SELECT '转班审批导出', @parent_menu_id, 7, '#', '', '', '', 1, 0, 'F', '0', '0', 'system:student:transferApprove:export', '#', 'admin', NOW(), 'admin', NOW(), ''
 WHERE NOT EXISTS (
   SELECT 1 FROM sys_menu WHERE parent_id = @parent_menu_id AND perms = 'system:student:transferApprove:export'
 );
@@ -171,6 +178,7 @@ WHERE parent_id = @parent_menu_id
     'system:student:transferApprove:add',
     'system:student:transferApprove:approve',
     'system:student:transferApprove:cancel',
+    'system:student:transferApprove:resubmit',
     'system:student:transferApprove:remove'
   );
 

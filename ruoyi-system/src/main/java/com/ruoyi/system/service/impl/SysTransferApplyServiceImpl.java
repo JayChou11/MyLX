@@ -154,21 +154,7 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
             throw new ServiceException("目标班级不能与原班级相同");
         }
 
-        SysTransferApply existQuery = new SysTransferApply();
-        existQuery.setStudentId(applyDto.getStudentId());
-        existQuery.setStatus("0");
-        List<SysTransferApply> existList = transferApplyMapper.selectTransferApplyList(existQuery);
-        if (StringUtils.isNotNull(existList) && !existList.isEmpty())
-        {
-            throw new ServiceException("该学生已有待审批的转班申请");
-        }
-
-        existQuery.setStatus("1");
-        existList = transferApplyMapper.selectTransferApplyList(existQuery);
-        if (StringUtils.isNotNull(existList) && !existList.isEmpty())
-        {
-            throw new ServiceException("该学生已有待审批的转班申请");
-        }
+        validatePendingApplyNotExists(student.getStudentId());
 
         SysTransferApply transferApply = new SysTransferApply();
         transferApply.setStudentId(student.getStudentId());
@@ -282,6 +268,65 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
         updateApply.setApplyId(applyId);
         updateApply.setStatus("4");
         updateApply.setUpdateBy(cancelBy);
+        return transferApplyMapper.updateTransferApply(updateApply);
+    }
+
+    /**
+     * 重新提交转班申请
+     *
+     * @param applyId 申请ID
+     * @param applyDto 申请信息
+     * @return 结果
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public int resubmitTransferApply(Long applyId, SysTransferApplyDto applyDto)
+    {
+        SysTransferApply transferApply = transferApplyMapper.selectTransferApplyByApplyId(applyId);
+        validateResubmitPermission(transferApply);
+        validateResubmitStatus(transferApply);
+        if (!transferApply.getStudentId().equals(applyDto.getStudentId()))
+        {
+            throw new ServiceException("重新提交的学生不能与原申请不一致");
+        }
+
+        SysStudent student = studentMapper.selectStudentByStudentId(transferApply.getStudentId());
+        if (student == null)
+        {
+            throw new ServiceException("学生不存在");
+        }
+        SysClass targetClass = classMapper.selectClassByClassId(applyDto.getAfterClassId());
+        if (targetClass == null)
+        {
+            throw new ServiceException("目标班级不存在");
+        }
+        SysClass sourceClass = classMapper.selectClassByClassId(student.getClassId());
+        if (sourceClass == null)
+        {
+            throw new ServiceException("原班级不存在");
+        }
+        if (sourceClass.getClassId().equals(targetClass.getClassId()))
+        {
+            throw new ServiceException("目标班级不能与原班级相同");
+        }
+
+        validatePendingApplyNotExists(student.getStudentId());
+
+        SysTransferApply updateApply = new SysTransferApply();
+        updateApply.setApplyId(applyId);
+        updateApply.setStudentName(student.getStudentName());
+        updateApply.setBeforeClassId(sourceClass.getClassId());
+        updateApply.setBeforeClassName(sourceClass.getClassName());
+        updateApply.setBeforeGrade(sourceClass.getGrade());
+        updateApply.setAfterClassId(targetClass.getClassId());
+        updateApply.setAfterClassName(targetClass.getClassName());
+        updateApply.setAfterGrade(targetClass.getGrade());
+        updateApply.setApplyReason(applyDto.getApplyReason());
+        updateApply.setApplyBy(applyDto.getApplyBy());
+        updateApply.setApplyTime(new Date());
+        updateApply.setStatus("0");
+        updateApply.setRejectReason("");
+        updateApply.setUpdateBy(applyDto.getApplyBy());
         return transferApplyMapper.updateTransferApply(updateApply);
     }
 
@@ -411,6 +456,25 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
         throw new ServiceException("只有申请人或教务处可以删除当前申请");
     }
 
+    private void validatePendingApplyNotExists(Long studentId)
+    {
+        SysTransferApply existQuery = new SysTransferApply();
+        existQuery.setStudentId(studentId);
+        existQuery.setStatus("0");
+        List<SysTransferApply> existList = transferApplyMapper.selectTransferApplyList(existQuery);
+        if (StringUtils.isNotNull(existList) && !existList.isEmpty())
+        {
+            throw new ServiceException("该学生已有待审批的转班申请");
+        }
+
+        existQuery.setStatus("1");
+        existList = transferApplyMapper.selectTransferApplyList(existQuery);
+        if (StringUtils.isNotNull(existList) && !existList.isEmpty())
+        {
+            throw new ServiceException("该学生已有待审批的转班申请");
+        }
+    }
+
     /**
      * 校验当前用户是否有权限撤回申请。
      *
@@ -427,6 +491,24 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
             return;
         }
         throw new ServiceException("只有申请人本人可以撤回当前申请");
+    }
+
+    /**
+     * 校验当前用户是否有权限重新提交申请。
+     *
+     * @param transferApply 转班申请
+     */
+    private void validateResubmitPermission(SysTransferApply transferApply)
+    {
+        if (transferApply == null)
+        {
+            throw new ServiceException("转班申请不存在");
+        }
+        if (SecurityUtils.isAdmin() || isApplyOwner(transferApply))
+        {
+            return;
+        }
+        throw new ServiceException("只有申请人本人可以重新提交当前申请");
     }
 
     private void validateApprovePermission(SysTransferApply transferApply, Integer approveLevel, String approveBy)
@@ -486,6 +568,23 @@ public class SysTransferApplyServiceImpl implements ISysTransferApplyService
         if (!"0".equals(transferApply.getStatus()) && !"1".equals(transferApply.getStatus()))
         {
             throw new ServiceException("只有待审批的申请才允许撤回");
+        }
+    }
+
+    /**
+     * 校验当前申请状态是否允许重新提交。
+     *
+     * @param transferApply 转班申请
+     */
+    private void validateResubmitStatus(SysTransferApply transferApply)
+    {
+        if (transferApply == null)
+        {
+            throw new ServiceException("转班申请不存在");
+        }
+        if (!"3".equals(transferApply.getStatus()) && !"4".equals(transferApply.getStatus()))
+        {
+            throw new ServiceException("只有已拒绝或已撤回的申请才允许重新提交");
         }
     }
 

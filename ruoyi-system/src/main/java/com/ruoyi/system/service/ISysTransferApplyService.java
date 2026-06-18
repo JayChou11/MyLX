@@ -56,12 +56,6 @@ public interface ISysTransferApplyService
     public int approveTransferApply(Long applyId, String approveResult, String approveRemark, String approveBy);
 
     /**
-     * 删除转班申请
-     *
-     * @param applyId 申请ID
-     * @return 结果
-     */
-    /**
      * 撤回转班申请
      *
      * @param applyId 申请ID
@@ -70,6 +64,21 @@ public interface ISysTransferApplyService
      */
     public int cancelTransferApply(Long applyId, String cancelBy);
 
+    /**
+     * 重新提交转班申请
+     *
+     * @param applyId 申请ID
+     * @param applyDto 申请信息
+     * @return 结果
+     */
+    public int resubmitTransferApply(Long applyId, SysTransferApplyDto applyDto);
+
+    /**
+     * 删除转班申请
+     *
+     * @param applyId 申请ID
+     * @return 结果
+     */
     public int deleteTransferApplyByApplyId(Long applyId);
 
     /**

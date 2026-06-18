@@ -75,11 +75,12 @@
           <span>{{ parseTime(scope.row.applyTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" width="200" fixed="right">
+      <el-table-column label="操作" align="center" width="260" fixed="right">
         <template #default="scope">
           <el-button link type="primary" icon="View" @click="handleDetail(scope.row)">详情</el-button>
           <el-button link type="primary" icon="Check" @click="handleApprove(scope.row)" v-if="canApprove(scope.row)" v-hasPermi="['system:student:transferApprove:approve']">审批</el-button>
           <el-button link type="warning" icon="RefreshLeft" @click="handleCancelApply(scope.row)" v-if="canCancel(scope.row)" v-hasPermi="['system:student:transferApprove:cancel']">撤回</el-button>
+          <el-button link type="primary" icon="Refresh" @click="handleResubmit(scope.row)" v-if="canResubmit(scope.row)" v-hasPermi="['system:student:transferApprove:resubmit']">重新提交</el-button>
           <el-button link type="danger" icon="Delete" @click="handleDelete(scope.row)" v-if="canDelete(scope.row)" v-hasPermi="['system:student:transferApprove:remove']">删除</el-button>
         </template>
       </el-table-column>
@@ -94,10 +95,10 @@
     />
 
     <!-- 新增申请对话框 -->
-    <el-dialog title="新增转班申请" v-model="addOpen" width="600px" append-to-body @close="cancelAdd">
+    <el-dialog :title="addDialogTitle" v-model="addOpen" width="600px" append-to-body @close="cancelAdd">
       <el-form ref="addRef" :model="addForm" :rules="addRules" label-width="92px">
         <el-form-item label="选择学生" prop="studentId">
-          <el-select v-model="addForm.studentId" filterable remote reserve-keyword placeholder="请输入学生姓名或学号搜索" :remote-method="searchStudent" :loading="studentLoading" style="width: 100%">
+          <el-select v-model="addForm.studentId" filterable remote reserve-keyword placeholder="请输入学生姓名或学号搜索" :remote-method="searchStudent" :loading="studentLoading" :disabled="isResubmit" style="width: 100%">
             <el-option v-for="item in studentOptions" :key="item.studentId" :label="item.studentName + ' (' + item.studentNo + ')'" :value="item.studentId" />
           </el-select>
         </el-form-item>
@@ -191,7 +192,7 @@
 </template>
 
 <script setup name="TransferApprove">
-import { listTransferApply, getTransferApply, addTransferApply, approveTransferApply, cancelTransferApply, delTransferApply, exportTransferApply } from '@/api/system/transferApply'
+import { listTransferApply, getTransferApply, addTransferApply, approveTransferApply, cancelTransferApply, resubmitTransferApply, delTransferApply, exportTransferApply } from '@/api/system/transferApply'
 import { listStudent } from '@/api/system/student'
 import { listClass } from '@/api/system/class'
 import useUserStore from '@/store/modules/user'
@@ -216,10 +217,14 @@ const dateRange = ref([])
 // 新增相关
 const addOpen = ref(false)
 const addRef = ref(null)
+const addMode = ref('add')
+const resubmitApplyId = ref(null)
 const studentLoading = ref(false)
 const studentOptions = ref([])
 const gradeOptions = ref(['初一', '初二', '初三', '高一', '高二', '高三'])
 const classOptions = ref([])
+const isResubmit = computed(() => addMode.value === 'resubmit')
+const addDialogTitle = computed(() => isResubmit.value ? '重新提交转班申请' : '新增转班申请')
 
 // 详情相关
 const detailOpen = ref(false)
@@ -309,6 +314,15 @@ function canCancel(row) {
   return isAdmin.value || row.applyBy === loginUserName.value
 }
 
+/** 是否可以重新提交 */
+function canResubmit(row) {
+  const canOperateStatus = row.status === '3' || row.status === '4'
+  if (!canOperateStatus) {
+    return false
+  }
+  return isAdmin.value || row.applyBy === loginUserName.value
+}
+
 /** 是否可以删除 */
 function canDelete(row) {
   const canOperateStatus = row.status === '0' || row.status === '3' || row.status === '4'
@@ -345,6 +359,8 @@ function handleGradeChange(grade) {
 /** 新增按钮操作 */
 function handleAdd() {
   proxy.resetForm("addRef")
+  addMode.value = 'add'
+  resubmitApplyId.value = null
   addForm.value.studentId = undefined
   addForm.value.afterGrade = undefined
   addForm.value.afterClassId = undefined
@@ -357,18 +373,49 @@ function handleAdd() {
 /** 取消新增 */
 function cancelAdd() {
   addOpen.value = false
+  addMode.value = 'add'
+  resubmitApplyId.value = null
   proxy.resetForm("addRef")
   studentOptions.value = []
   classOptions.value = []
+}
+
+/** 重新提交按钮操作 */
+function handleResubmit(row) {
+  proxy.resetForm("addRef")
+  addMode.value = 'resubmit'
+  resubmitApplyId.value = row.applyId
+  addForm.value.studentId = row.studentId
+  addForm.value.afterGrade = row.afterGrade
+  addForm.value.afterClassId = undefined
+  addForm.value.applyReason = row.applyReason
+  studentOptions.value = [{
+    studentId: row.studentId,
+    studentName: row.studentName,
+    studentNo: row.studentId
+  }]
+  classOptions.value = []
+  addOpen.value = true
+  if (row.afterGrade) {
+    listClass({ grade: row.afterGrade }).then(response => {
+      classOptions.value = response.rows
+      addForm.value.afterClassId = row.afterClassId
+    })
+  }
 }
 
 /** 提交新增 */
 function submitAdd() {
   proxy.$refs["addRef"].validate(valid => {
     if (valid) {
-      addTransferApply(addForm.value).then(response => {
-        proxy.$modal.msgSuccess("申请提交成功")
+      const request = isResubmit.value
+        ? resubmitTransferApply(resubmitApplyId.value, addForm.value)
+        : addTransferApply(addForm.value)
+      request.then(response => {
+        proxy.$modal.msgSuccess(isResubmit.value ? "重新提交成功" : "申请提交成功")
         addOpen.value = false
+        addMode.value = 'add'
+        resubmitApplyId.value = null
         getList()
       })
     }
