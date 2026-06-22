@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ruoyi.system.mapper.SysStudentScoreMapper">
+
+    <!--
+        resultMap 负责把“数据库列名”映射到“Java 属性名”。
+        数据库通常是下划线命名，例如 score_id；
+        Java 通常是驼峰命名，例如 scoreId。
+        MyBatis 查询到一行结果后，会按这里的映射调用 setScoreId、setStudentName 等 setter。
+    -->
+    <resultMap type="SysStudentScore" id="SysStudentScoreResult">
+        <id     property="scoreId"      column="score_id"      />
+        <result property="studentId"    column="student_id"    />
+        <result property="studentNo"    column="student_no"    />
+        <result property="studentName"  column="student_name"  />
+        <result property="grade"        column="grade"         />
+        <result property="classId"      column="class_id"      />
+        <result property="className"    column="class_name"    />
+        <result property="examName"     column="exam_name"     />
+        <result property="chineseScore" column="chinese_score" />
+        <result property="mathScore"    column="math_score"    />
+        <result property="englishScore" column="english_score" />
+        <result property="totalScore"   column="total_score"   />
+        <result property="averageScore" column="average_score" />
+        <result property="createBy"     column="create_by"     />
+        <result property="createTime"   column="create_time"   />
+        <result property="updateBy"     column="update_by"     />
+        <result property="updateTime"   column="update_time"   />
+        <result property="remark"       column="remark"        />
+    </resultMap>
+
+    <!--
+        公共查询片段：列表、详情、导出都需要这一段 select + join。
+
+        ss 是 sys_student_score 的别名，表示成绩表；
+        s 是 sys_student 的别名，表示学生表；
+        c 是 sys_class 的别名，表示班级表。
+
+        成绩表只保存 student_id，不保存学生姓名、年级、班级名。
+        所以这里通过 left join 把页面展示需要的信息一起查出来。
+    -->
+    <sql id="selectStudentScoreVo">
+        select ss.score_id, ss.student_id, s.student_no, s.student_name,
+               c.grade, c.class_id, c.class_name,
+               ss.exam_name, ss.chinese_score, ss.math_score, ss.english_score,
+               ss.total_score, ss.average_score,
+               ss.create_by, ss.create_time, ss.update_by, ss.update_time, ss.remark
+        from sys_student_score ss
+        left join sys_student s on ss.student_id = s.student_id
+        left join sys_class c on s.class_id = c.class_id
+    </sql>
+
+    <!--
+        根据主键查详情。
+        parameterType="Long" 表示这个 SQL 只接收一个 Long 类型参数；
+        #{scoreId} 会取方法参数值并作为预编译参数传给数据库。
+    -->
+    <select id="selectStudentScoreByScoreId" parameterType="Long" resultMap="SysStudentScoreResult">
+        <include refid="selectStudentScoreVo"/>
+        where ss.score_id = #{scoreId}
+    </select>
+
+    <!--
+        查询列表。
+        parameterType="SysStudentScore" 表示前端传来的查询条件会封装成一个 SysStudentScore 对象。
+        <where> 会自动处理第一个 and：如果有条件，它会生成 where；如果没有条件，它什么也不生成。
+    -->
+    <select id="selectStudentScoreList" parameterType="SysStudentScore" resultMap="SysStudentScoreResult">
+        <include refid="selectStudentScoreVo"/>
+        <where>
+            <if test="studentNo != null and studentNo != ''">
+                <!-- 按学号模糊查询，条件字段来自学生表 s。 -->
+                and s.student_no like concat('%', #{studentNo}, '%')
+            </if>
+            <if test="studentName != null and studentName != ''">
+                <!-- 按学生姓名模糊查询，条件字段同样来自学生表 s。 -->
+                and s.student_name like concat('%', #{studentName}, '%')
+            </if>
+            <if test="examName != null and examName != ''">
+                <!-- 按考试名称模糊查询，条件字段来自成绩表 ss。 -->
+                and ss.exam_name like concat('%', #{examName}, '%')
+            </if>
+            <if test="classId != null">
+                and c.class_id = #{classId}
+            </if>
+            <if test="grade != null and grade != ''">
+                and c.grade = #{grade}
+            </if>
+            <if test="params.beginTime != null and params.beginTime != ''">
+                <!-- BaseEntity 里有 params，用来接收前端日期范围这类扩展查询参数。 -->
+                and date_format(ss.create_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+            </if>
+            <if test="params.endTime != null and params.endTime != ''">
+                and date_format(ss.create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+            </if>
+        </where>
+        order by ss.score_id desc
+    </select>
+
+    <!--
+        根据多个 scoreId 查询。
+        collection="array" 是因为 Mapper 方法参数是 Long[]；
+        foreach 会把数组展开成 in (#{scoreId}, #{scoreId}, ...)。
+    -->
+    <select id="selectStudentScoreListByIds" resultMap="SysStudentScoreResult">
+        <include refid="selectStudentScoreVo"/>
+        where ss.score_id in
+        <foreach item="scoreId" collection="array" open="(" separator="," close=")">
+            #{scoreId}
+        </foreach>
+        order by ss.score_id desc
+    </select>
+
+    <!--
+        按班级和考试聚合成绩，用于学习 avg/max/min/sum/count 这类统计 SQL。
+
+        这里使用 resultType 而不是 resultMap：
+        因为返回的是统计 VO SysStudentScoreClassStat，不是成绩实体 SysStudentScore。
+        SQL 中的别名 classId、className、avgScore 等要和 VO 属性名保持一致。
+    -->
+    <select id="selectStudentScoreClassStatList" parameterType="SysStudentScore" resultType="com.ruoyi.system.domain.vo.SysStudentScoreClassStat">
+        select c.class_id as classId,
+               c.grade,
+               c.class_name as className,
+               ss.exam_name as examName,
+               count(ss.score_id) as studentCount,
+               round(avg(ss.chinese_score), 2) as avgChineseScore,
+               round(avg(ss.math_score), 2) as avgMathScore,
+               round(avg(ss.english_score), 2) as avgEnglishScore,
+               round(avg(ss.average_score), 2) as avgScore,
+               max(ss.total_score) as maxTotalScore,
+               min(ss.total_score) as minTotalScore,
+               sum(case when ss.average_score &gt;= 60 then 1 else 0 end) as passCount
+        from sys_student_score ss
+        <!--
+            统计只统计能关联到学生和班级的成绩，所以这里用 inner join。
+            如果用 left join，可能会把没有学生/班级的数据也统计进去，业务含义不清楚。
+        -->
+        inner join sys_student s on ss.student_id = s.student_id
+        inner join sys_class c on s.class_id = c.class_id
+        <where>
+            <if test="examName != null and examName != ''">
+                and ss.exam_name like concat('%', #{examName}, '%')
+            </if>
+            <if test="classId != null">
+                and c.class_id = #{classId}
+            </if>
+            <if test="grade != null and grade != ''">
+                and c.grade = #{grade}
+            </if>
+        </where>
+        <!--
+            group by 决定“按什么维度分组”。
+            这里一组就是：同一个班级 + 同一个考试名称。
+            每组里可能有很多学生成绩，avg/max/min/count/sum 都是在组内计算。
+        -->
+        group by c.class_id, c.grade, c.class_name, ss.exam_name
+        order by c.grade asc, c.class_name asc, ss.exam_name desc
+    </select>
+
+    <!--
+        唯一性校验查询。
+        业务规则是：同一个 student_id + exam_name 只能存在一条成绩。
+        新增、修改、导入覆盖都会用到这条 SQL。
+    -->
+    <select id="selectStudentScoreByStudentAndExam" resultMap="SysStudentScoreResult">
+        <include refid="selectStudentScoreVo"/>
+        where ss.student_id = #{studentId}
+          and ss.exam_name = #{examName}
+        limit 1
+    </select>
+
+    <!--
+        新增成绩。
+        useGeneratedKeys="true" + keyProperty="scoreId" 表示数据库自增主键生成后，
+        MyBatis 会把新生成的 score_id 回填到 Java 对象的 scoreId 属性里。
+    -->
+    <insert id="insertStudentScore" parameterType="SysStudentScore" useGeneratedKeys="true" keyProperty="scoreId">
+        insert into sys_student_score(
+            student_id, exam_name, chinese_score, math_score, english_score,
+            total_score, average_score,
+            <if test="remark != null and remark != ''">remark,</if>
+            <if test="createBy != null and createBy != ''">create_by,</if>
+            create_time
+        ) values (
+            #{studentId}, #{examName}, #{chineseScore}, #{mathScore}, #{englishScore},
+            #{totalScore}, #{averageScore},
+            <if test="remark != null and remark != ''">#{remark},</if>
+            <if test="createBy != null and createBy != ''">#{createBy},</if>
+            sysdate()
+        )
+    </insert>
+
+    <!--
+        修改成绩。
+        <set> 会自动去掉最后一个多余逗号，并在至少有字段更新时生成 set 关键字。
+        total_score 和 average_score 虽然不是前端输入，但 Service 会重新计算后传进来一起更新。
+    -->
+    <update id="updateStudentScore" parameterType="SysStudentScore">
+        update sys_student_score
+        <set>
+            <if test="studentId != null">student_id = #{studentId},</if>
+            <if test="examName != null and examName != ''">exam_name = #{examName},</if>
+            <if test="chineseScore != null">chinese_score = #{chineseScore},</if>
+            <if test="mathScore != null">math_score = #{mathScore},</if>
+            <if test="englishScore != null">english_score = #{englishScore},</if>
+            <if test="totalScore != null">total_score = #{totalScore},</if>
+            <if test="averageScore != null">average_score = #{averageScore},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateBy != null and updateBy != ''">update_by = #{updateBy},</if>
+            update_time = sysdate()
+        </set>
+        where score_id = #{scoreId}
+    </update>
+
+    <!-- 单条删除：根据主键删除一条成绩。 -->
+    <delete id="deleteStudentScoreByScoreId" parameterType="Long">
+        delete from sys_student_score where score_id = #{scoreId}
+    </delete>
+
+    <!-- 批量删除：前端勾选多行后，把多个 scoreId 传进来，foreach 拼成 in (...)。 -->
+    <delete id="deleteStudentScoreByScoreIds" parameterType="Long">
+        delete from sys_student_score where score_id in
+        <foreach item="scoreId" collection="array" open="(" separator="," close=")">
+            #{scoreId}
+        </foreach>
+    </delete>
+
+</mapper>
