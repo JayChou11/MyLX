@@ -81,6 +81,22 @@ public class SysStudentScoreController extends BaseController
     }
 
     /**
+     * 查询某个学生的成绩趋势
+     *
+     * 前端点击“成绩分析”时，会把当前行的 studentId 放到路径里：
+     * GET /system/studentScore/trend/100
+     *
+     * 返回数据是一组按考试时间排序的成绩记录，前端可以用它画折线图：
+     * x 轴是考试名称，y 轴可以是总分、平均分、班级排名、年级排名。
+     */
+    @PreAuthorize("@ss.hasPermi('system:studentScore:query')")
+    @GetMapping("/trend/{studentId}")
+    public AjaxResult trend(@PathVariable("studentId") Long studentId)
+    {
+        return success(studentScoreService.selectStudentScoreTrendList(studentId));
+    }
+
+    /**
      * 导出学生成绩列表
      *
      * 如果 scoreIds 有值，表示用户点的是“选择导出”，只导出勾选的数据；

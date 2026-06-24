@@ -3,6 +3,7 @@ package com.ruoyi.system.service;
 import java.util.List;
 import com.ruoyi.system.domain.SysStudentScore;
 import com.ruoyi.system.domain.vo.SysStudentScoreClassStat;
+import com.ruoyi.system.domain.vo.SysStudentScoreTrendVo;
 
 /**
  * 学生成绩Service接口
@@ -25,6 +26,9 @@ public interface ISysStudentScoreService
 
     /** 按班级和考试名称统计成绩，返回统计 VO */
     public List<SysStudentScoreClassStat> selectStudentScoreClassStatList(SysStudentScore studentScore);
+
+    /** 查询某个学生的成绩趋势和每次考试排名 */
+    public List<SysStudentScoreTrendVo> selectStudentScoreTrendList(Long studentId);
 
     /** 新增成绩，内部会校验学生是否存在、成绩是否重复，并自动计算总分/平均分 */
     public int insertStudentScore(SysStudentScore studentScore);

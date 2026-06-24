@@ -24,6 +24,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <result property="englishScore" column="english_score" />
         <result property="totalScore"   column="total_score"   />
         <result property="averageScore" column="average_score" />
+        <result property="classRank"    column="class_rank"    />
+        <result property="gradeRank"    column="grade_rank"    />
         <result property="createBy"     column="create_by"     />
         <result property="createTime"   column="create_time"   />
         <result property="updateBy"     column="update_by"     />
@@ -53,6 +55,67 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </sql>
 
     <!--
+        带排名的公共查询片段。
+
+        这里没有使用 MySQL 8 的 dense_rank() 窗口函数，
+        而是用“相关子查询”写成兼容 MySQL 5.7 的版本。
+
+        排名公式可以理解为：
+        当前学生名次 = 比当前学生分数更高的“不同分数组合”数量 + 1。
+
+        举例：某班平均分从高到低是 98、95、95、90。
+        90 分前面有两个不同分数组合：98 和 95，所以 90 分排名第 3。
+        两个 95 分前面都只有一个不同分数组合：98，所以它们都排名第 2。
+
+        这里用 average_score + total_score 作为排名依据，
+        同一场考试里这两个值都相同才算真正并列。
+
+        class_rank：同一考试 + 同一班级内排名；
+        grade_rank：同一考试 + 同一年级内排名。
+
+        这里故意先在 base 查询中拿到所有人的成绩基础数据，再计算排名，
+        再在外层按学号、姓名等条件筛选。
+        这样当你搜索某个学生时，他显示的仍然是全班/全年级真实排名，
+        而不是筛选后只剩一条数据时变成第 1 名。
+    -->
+    <sql id="selectRankedStudentScoreVo">
+        select base.*,
+               (
+                   select count(distinct higher_class.average_score, higher_class.total_score) + 1
+                   from sys_student_score higher_class
+                   inner join sys_student higher_class_student on higher_class.student_id = higher_class_student.student_id
+                   inner join sys_class higher_class_info on higher_class_student.class_id = higher_class_info.class_id
+                   where higher_class.exam_name = base.exam_name
+                     and higher_class_info.class_id = base.class_id
+                     and (
+                         higher_class.average_score &gt; base.average_score
+                         or (
+                             higher_class.average_score = base.average_score
+                             and higher_class.total_score &gt; base.total_score
+                         )
+                     )
+               ) as class_rank,
+               (
+                   select count(distinct higher_grade.average_score, higher_grade.total_score) + 1
+                   from sys_student_score higher_grade
+                   inner join sys_student higher_grade_student on higher_grade.student_id = higher_grade_student.student_id
+                   inner join sys_class higher_grade_info on higher_grade_student.class_id = higher_grade_info.class_id
+                   where higher_grade.exam_name = base.exam_name
+                     and higher_grade_info.grade = base.grade
+                     and (
+                         higher_grade.average_score &gt; base.average_score
+                         or (
+                             higher_grade.average_score = base.average_score
+                             and higher_grade.total_score &gt; base.total_score
+                         )
+                     )
+               ) as grade_rank
+        from (
+            <include refid="selectStudentScoreVo"/>
+        ) base
+    </sql>
+
+    <!--
         根据主键查详情。
         parameterType="Long" 表示这个 SQL 只接收一个 Long 类型参数；
         #{scoreId} 会取方法参数值并作为预编译参数传给数据库。
@@ -68,35 +131,35 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         <where> 会自动处理第一个 and：如果有条件，它会生成 where；如果没有条件，它什么也不生成。
     -->
     <select id="selectStudentScoreList" parameterType="SysStudentScore" resultMap="SysStudentScoreResult">
-        <include refid="selectStudentScoreVo"/>
+        <include refid="selectRankedStudentScoreVo"/>
         <where>
             <if test="studentNo != null and studentNo != ''">
                 <!-- 按学号模糊查询，条件字段来自学生表 s。 -->
-                and s.student_no like concat('%', #{studentNo}, '%')
+                and base.student_no like concat('%', #{studentNo}, '%')
             </if>
             <if test="studentName != null and studentName != ''">
                 <!-- 按学生姓名模糊查询，条件字段同样来自学生表 s。 -->
-                and s.student_name like concat('%', #{studentName}, '%')
+                and base.student_name like concat('%', #{studentName}, '%')
             </if>
             <if test="examName != null and examName != ''">
                 <!-- 按考试名称模糊查询，条件字段来自成绩表 ss。 -->
-                and ss.exam_name like concat('%', #{examName}, '%')
+                and base.exam_name like concat('%', #{examName}, '%')
             </if>
             <if test="classId != null">
-                and c.class_id = #{classId}
+                and base.class_id = #{classId}
             </if>
             <if test="grade != null and grade != ''">
-                and c.grade = #{grade}
+                and base.grade = #{grade}
             </if>
             <if test="params.beginTime != null and params.beginTime != ''">
                 <!-- BaseEntity 里有 params，用来接收前端日期范围这类扩展查询参数。 -->
-                and date_format(ss.create_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
+                and date_format(base.create_time,'%Y%m%d') &gt;= date_format(#{params.beginTime},'%Y%m%d')
             </if>
             <if test="params.endTime != null and params.endTime != ''">
-                and date_format(ss.create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
+                and date_format(base.create_time,'%Y%m%d') &lt;= date_format(#{params.endTime},'%Y%m%d')
             </if>
         </where>
-        order by ss.score_id desc
+        order by base.score_id desc
     </select>
 
     <!--
@@ -105,12 +168,12 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         foreach 会把数组展开成 in (#{scoreId}, #{scoreId}, ...)。
     -->
     <select id="selectStudentScoreListByIds" resultMap="SysStudentScoreResult">
-        <include refid="selectStudentScoreVo"/>
-        where ss.score_id in
+        <include refid="selectRankedStudentScoreVo"/>
+        where base.score_id in
         <foreach item="scoreId" collection="array" open="(" separator="," close=")">
             #{scoreId}
         </foreach>
-        order by ss.score_id desc
+        order by base.score_id desc
     </select>
 
     <!--
@@ -132,7 +195,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                round(avg(ss.average_score), 2) as avgScore,
                max(ss.total_score) as maxTotalScore,
                min(ss.total_score) as minTotalScore,
-               sum(case when ss.average_score &gt;= 60 then 1 else 0 end) as passCount
+               sum(case when ss.average_score &gt;= 60 then 1 else 0 end) as passCount,
+               sum(case when ss.average_score &gt;= 90 then 1 else 0 end) as excellentCount,
+               sum(case when ss.average_score &lt; 60 then 1 else 0 end) as failCount
         from sys_student_score ss
         <!--
             统计只统计能关联到学生和班级的成绩，所以这里用 inner join。
@@ -158,6 +223,20 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         -->
         group by c.class_id, c.grade, c.class_name, ss.exam_name
         order by c.grade asc, c.class_name asc, ss.exam_name desc
+    </select>
+
+    <!--
+        查询单个学生的成绩趋势。
+
+        这里复用带排名的 selectRankedStudentScoreVo：
+        1. 先计算所有学生在每场考试中的排名；
+        2. 再筛选出当前学生；
+        3. 按 create_time、score_id 正序排列，前端就可以画趋势线。
+    -->
+    <select id="selectStudentScoreTrendList" parameterType="Long" resultType="com.ruoyi.system.domain.vo.SysStudentScoreTrendVo">
+        <include refid="selectRankedStudentScoreVo"/>
+        where base.student_id = #{studentId}
+        order by base.create_time asc, base.score_id asc
     </select>
 
     <!--

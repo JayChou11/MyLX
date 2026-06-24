@@ -30,6 +30,15 @@ export function listStudentScoreClassStats(query) {
   })
 }
 
+// 查询学生成绩趋势
+// studentId 放在路径里，对应后端 /system/studentScore/trend/{studentId}。
+export function listStudentScoreTrend(studentId) {
+  return request({
+    url: '/system/studentScore/trend/' + studentId,
+    method: 'get'
+  })
+}
+
 // 新增学生成绩
 // data 放在请求体里，对应后端 @RequestBody SysStudentScore。
 export function addStudentScore(data) {

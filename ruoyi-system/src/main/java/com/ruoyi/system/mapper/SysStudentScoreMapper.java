@@ -4,6 +4,7 @@ import java.util.List;
 import org.apache.ibatis.annotations.Param;
 import com.ruoyi.system.domain.SysStudentScore;
 import com.ruoyi.system.domain.vo.SysStudentScoreClassStat;
+import com.ruoyi.system.domain.vo.SysStudentScoreTrendVo;
 
 /**
  * 学生成绩Mapper接口
@@ -58,6 +59,17 @@ public interface SysStudentScoreMapper
      * @return 班级成绩统计集合
      */
     public List<SysStudentScoreClassStat> selectStudentScoreClassStatList(SysStudentScore studentScore);
+
+    /**
+     * 查询学生成绩趋势
+     *
+     * 趋势接口按学生查询该学生所有考试成绩，并附带每次考试的班级/年级排名。
+     * 返回 VO 是因为趋势图不需要三科明细，只需要考试名称、总分、平均分和排名等展示数据。
+     *
+     * @param studentId 学生ID
+     * @return 学生成绩趋势集合
+     */
+    public List<SysStudentScoreTrendVo> selectStudentScoreTrendList(Long studentId);
 
     /**
      * 根据学生和考试名称查询成绩

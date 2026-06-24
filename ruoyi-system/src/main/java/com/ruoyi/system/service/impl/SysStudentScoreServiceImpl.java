@@ -15,6 +15,7 @@ import com.ruoyi.common.utils.bean.BeanValidators;
 import com.ruoyi.system.domain.SysStudent;
 import com.ruoyi.system.domain.SysStudentScore;
 import com.ruoyi.system.domain.vo.SysStudentScoreClassStat;
+import com.ruoyi.system.domain.vo.SysStudentScoreTrendVo;
 import com.ruoyi.system.mapper.SysStudentMapper;
 import com.ruoyi.system.mapper.SysStudentScoreMapper;
 import com.ruoyi.system.service.ISysStudentScoreService;
@@ -74,6 +75,14 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
     {
         // 统计逻辑直接由 SQL 聚合完成，Service 不再循环计算，避免把数据库擅长的事情搬到 Java 里。
         return studentScoreMapper.selectStudentScoreClassStatList(studentScore);
+    }
+
+    @Override
+    public List<SysStudentScoreTrendVo> selectStudentScoreTrendList(Long studentId)
+    {
+        // 趋势分析必须依附于具体学生，所以先校验学生存在，再去查该学生的多次考试成绩。
+        checkStudentExists(studentId);
+        return studentScoreMapper.selectStudentScoreTrendList(studentId);
     }
 
     @Override

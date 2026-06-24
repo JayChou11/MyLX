@@ -86,6 +86,9 @@
       <el-col :span="1.5">
         <el-button type="info" plain icon="DataAnalysis" @click="handleClassStats" v-hasPermi="['system:studentScore:stat']">班级成绩统计</el-button>
       </el-col>
+      <el-col :span="1.5">
+        <el-button type="primary" plain icon="TrendCharts" :disabled="single" @click="handleTrend" v-hasPermi="['system:studentScore:query']">成绩分析</el-button>
+      </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
@@ -107,14 +110,17 @@
       <el-table-column label="英语" align="center" prop="englishScore" width="90" />
       <el-table-column label="总分" align="center" prop="totalScore" width="90" />
       <el-table-column label="平均分" align="center" prop="averageScore" width="90" />
+      <el-table-column label="班级排名" align="center" prop="classRank" width="100" />
+      <el-table-column label="年级排名" align="center" prop="gradeRank" width="100" />
       <el-table-column label="创建时间" align="center" prop="createTime" width="180">
         <template #default="scope">
           <span>{{ parseTime(scope.row.createTime) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="150">
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width" width="210">
         <template #default="scope">
           <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['system:studentScore:edit']">修改</el-button>
+          <el-button link type="primary" icon="TrendCharts" @click="handleTrend(scope.row)" v-hasPermi="['system:studentScore:query']">分析</el-button>
           <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['system:studentScore:remove']">删除</el-button>
         </template>
       </el-table-column>
@@ -213,19 +219,54 @@
         <el-table-column label="最高总分" align="center" prop="maxTotalScore" />
         <el-table-column label="最低总分" align="center" prop="minTotalScore" />
         <el-table-column label="及格人数" align="center" prop="passCount" />
+        <el-table-column label="优秀人数" align="center" prop="excellentCount" />
+        <el-table-column label="不及格人数" align="center" prop="failCount" />
       </el-table>
       <template #footer>
         <el-button @click="classStatsOpen = false">关 闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!--
+      成绩分析弹窗：
+      上方用 ECharts 展示总分/平均分趋势；
+      下方用表格展示每次考试的班级排名和年级排名。
+    -->
+    <el-dialog title="成绩分析" v-model="trendOpen" width="980px" append-to-body @closed="destroyTrendChart">
+      <div v-loading="trendLoading">
+        <el-descriptions :column="4" border class="trend-summary">
+          <el-descriptions-item label="学号">{{ trendStudent.studentNo || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="姓名">{{ trendStudent.studentName || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="年级">{{ trendStudent.grade || "-" }}</el-descriptions-item>
+          <el-descriptions-item label="班级">{{ trendStudent.className || "-" }}</el-descriptions-item>
+        </el-descriptions>
+        <div ref="trendChartRef" class="trend-chart"></div>
+        <el-table :data="trendList" size="small">
+          <el-table-column label="考试名称" align="center" prop="examName" min-width="160" show-overflow-tooltip />
+          <el-table-column label="总分" align="center" prop="totalScore" />
+          <el-table-column label="平均分" align="center" prop="averageScore" />
+          <el-table-column label="班级排名" align="center" prop="classRank" />
+          <el-table-column label="年级排名" align="center" prop="gradeRank" />
+          <el-table-column label="录入时间" align="center" prop="createTime" width="170">
+            <template #default="scope">
+              <span>{{ parseTime(scope.row.createTime) }}</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="trendOpen = false">关 闭</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup name="StudentScore">
+import * as echarts from "echarts"
 import ExcelImportDialog from "@/components/ExcelImportDialog"
 import { listStudent } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
-import { listStudentScore, getStudentScore, delStudentScore, addStudentScore, updateStudentScore, listStudentScoreClassStats } from "@/api/system/studentScore"
+import { listStudentScore, getStudentScore, delStudentScore, addStudentScore, updateStudentScore, listStudentScoreClassStats, listStudentScoreTrend } from "@/api/system/studentScore"
 
 const { proxy } = getCurrentInstance()
 
@@ -257,6 +298,17 @@ const title = ref("")
 const classStatsOpen = ref(false)
 const classStatsLoading = ref(false)
 const classStatsList = ref([])
+// 成绩趋势分析弹窗状态。
+// trendOpen 控制弹窗显示隐藏；trendLoading 控制接口加载时的遮罩；
+// trendList 保存后端返回的多次考试记录；trendStudent 保存当前正在分析的学生基础信息。
+const trendOpen = ref(false)
+const trendLoading = ref(false)
+const trendList = ref([])
+const trendStudent = ref({})
+// ECharts 初始化时需要拿到真实 DOM，所以这里用 ref 绑定图表容器 div。
+const trendChartRef = ref(null)
+// 图表实例不能放到 ref 里参与页面渲染，它只是第三方库对象；用普通变量保存即可。
+let trendChartInstance = null
 
 const data = reactive({
   // 新增/修改表单对象。
@@ -452,6 +504,121 @@ function handleClassStats() {
   })
 }
 
+/**
+ * 打开成绩分析弹窗。
+ *
+ * 这个方法有两个入口：
+ * 1. 行内“分析”按钮：会把当前行 row 传进来；
+ * 2. 工具栏“成绩分析”按钮：不会传 row，需要从勾选的 ids 中找到当前选中的那条成绩。
+ *
+ * 找到成绩行以后，只拿 studentId 调后端趋势接口。
+ * 因为趋势分析关注的是“这个学生所有考试的变化”，不是只看当前这一条 scoreId。
+ */
+function handleTrend(row) {
+  // 行内“分析”会传 row；工具栏“成绩分析”没有 row，就使用当前勾选的那条成绩。
+  const current = row && row.studentId ? row : scoreList.value.find(item => item.scoreId === ids.value[0])
+  if (!current) {
+    proxy.$modal.msgWarning("请选择一条成绩记录")
+    return
+  }
+  trendStudent.value = current
+  trendOpen.value = true
+  trendLoading.value = true
+  listStudentScoreTrend(current.studentId).then(response => {
+    // 后端 AjaxResult 的 data 就是趋势列表，每一项代表该学生的一次考试成绩。
+    trendList.value = response.data || []
+    // 等弹窗和图表容器渲染出来之后，再初始化 ECharts。
+    // 如果不等 nextTick，trendChartRef.value 可能还是 null，图表就找不到挂载位置。
+    nextTick(() => {
+      renderTrendChart()
+    })
+  }).finally(() => {
+    trendLoading.value = false
+  })
+}
+
+/**
+ * 渲染成绩趋势图。
+ *
+ * ECharts 的工作方式可以理解成三步：
+ * 1. echarts.init(dom)：把一个普通 div 变成图表画布；
+ * 2. 准备 xAxis/series 需要的数据数组；
+ * 3. setOption(...)：把配置和数据交给 ECharts，让它完成绘制。
+ */
+function renderTrendChart() {
+  if (!trendChartRef.value) {
+    return
+  }
+  if (!trendChartInstance) {
+    trendChartInstance = echarts.init(trendChartRef.value)
+  }
+  // x 轴展示考试名称；两条折线分别展示总分和平均分。
+  // Number(...) 是为了避免后端 BigDecimal 序列化后被当成字符串，影响图表数值计算。
+  const examNames = trendList.value.map(item => item.examName)
+  const totalScores = trendList.value.map(item => Number(item.totalScore || 0))
+  const averageScores = trendList.value.map(item => Number(item.averageScore || 0))
+  trendChartInstance.setOption({
+    tooltip: {
+      trigger: "axis"
+    },
+    legend: {
+      data: ["总分", "平均分"]
+    },
+    grid: {
+      left: 40,
+      right: 24,
+      bottom: 40,
+      top: 48,
+      containLabel: true
+    },
+    xAxis: {
+      type: "category",
+      data: examNames,
+      axisLabel: {
+        interval: 0,
+        // 考试次数较多时旋转文字，避免横轴名称挤在一起。
+        rotate: examNames.length > 3 ? 25 : 0
+      }
+    },
+    yAxis: {
+      type: "value",
+      min: 0
+    },
+    series: [
+      {
+        name: "总分",
+        type: "line",
+        smooth: true,
+        data: totalScores
+      },
+      {
+        name: "平均分",
+        type: "line",
+        smooth: true,
+        data: averageScores
+      }
+    ]
+  })
+}
+
+/**
+ * 销毁图表实例。
+ *
+ * 弹窗关闭后 DOM 会被隐藏/销毁，如果 ECharts 实例一直留着，
+ * 多次打开弹窗可能出现尺寸不准或内存占用增加的问题。
+ * 所以关闭弹窗、离开页面时都主动 dispose。
+ */
+function destroyTrendChart() {
+  if (trendChartInstance) {
+    trendChartInstance.dispose()
+    trendChartInstance = null
+  }
+}
+
+onBeforeUnmount(() => {
+  destroyTrendChart()
+})
+
 // 页面初始化：先准备下拉选项，再加载表格数据。
 loadStudentOptions()
 loadGradeOptions()
@@ -464,5 +631,15 @@ getList()
   border-radius: 4px;
   color: #606266;
   background: #f5f7fa;
+}
+
+.trend-summary {
+  margin-bottom: 16px;
+}
+
+.trend-chart {
+  width: 100%;
+  height: 320px;
+  margin-bottom: 16px;
 }
 </style>

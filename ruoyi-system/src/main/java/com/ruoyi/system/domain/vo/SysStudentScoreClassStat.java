@@ -52,6 +52,12 @@ public class SysStudentScoreClassStat
     /** 及格人数（按平均分 >= 60 统计） */
     private Long passCount;
 
+    /** 优秀人数（按平均分 >= 90 统计） */
+    private Long excellentCount;
+
+    /** 不及格人数（按平均分 < 60 统计） */
+    private Long failCount;
+
     public Long getClassId()
     {
         return classId;
@@ -170,5 +176,25 @@ public class SysStudentScoreClassStat
     public void setPassCount(Long passCount)
     {
         this.passCount = passCount;
+    }
+
+    public Long getExcellentCount()
+    {
+        return excellentCount;
+    }
+
+    public void setExcellentCount(Long excellentCount)
+    {
+        this.excellentCount = excellentCount;
+    }
+
+    public Long getFailCount()
+    {
+        return failCount;
+    }
+
+    public void setFailCount(Long failCount)
+    {
+        this.failCount = failCount;
     }
 }

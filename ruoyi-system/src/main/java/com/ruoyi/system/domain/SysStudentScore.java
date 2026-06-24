@@ -91,6 +91,23 @@ public class SysStudentScore extends BaseEntity
     @Excel(name = "平均分")
     private BigDecimal averageScore;
 
+    /**
+     * 班级排名（查询时动态计算，非数据库字段）
+     *
+     * 它不是存到 sys_student_score 表里的固定值，而是 SQL 根据同一考试、
+     * 同一班级下所有学生的平均分动态算出来。
+     */
+    @Excel(name = "班级排名")
+    private Long classRank;
+
+    /**
+     * 年级排名（查询时动态计算，非数据库字段）
+     *
+     * 年级排名的分组范围比班级排名更大：同一考试、同一年级下所有学生一起排名。
+     */
+    @Excel(name = "年级排名")
+    private Long gradeRank;
+
     public Long getScoreId()
     {
         return scoreId;
@@ -233,6 +250,26 @@ public class SysStudentScore extends BaseEntity
         this.averageScore = averageScore;
     }
 
+    public Long getClassRank()
+    {
+        return classRank;
+    }
+
+    public void setClassRank(Long classRank)
+    {
+        this.classRank = classRank;
+    }
+
+    public Long getGradeRank()
+    {
+        return gradeRank;
+    }
+
+    public void setGradeRank(Long gradeRank)
+    {
+        this.gradeRank = gradeRank;
+    }
+
     @Override
     public String toString()
     {
@@ -250,6 +287,8 @@ public class SysStudentScore extends BaseEntity
             .append("englishScore", getEnglishScore())
             .append("totalScore", getTotalScore())
             .append("averageScore", getAverageScore())
+            .append("classRank", getClassRank())
+            .append("gradeRank", getGradeRank())
             .append("createBy", getCreateBy())
             .append("createTime", getCreateTime())
             .append("updateBy", getUpdateBy())
