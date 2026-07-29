@@ -34,6 +34,32 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <!--
+        趋势分析专用结果映射。
+
+        这里不能偷懒直接用 resultType="SysStudentScoreTrendVo"：
+        因为当前项目没有开启 mapUnderscoreToCamelCase，
+        SQL 返回的 score_id、student_no、class_rank 这类下划线列名
+        不会自动映射成 Java 里的 scoreId、studentNo、classRank。
+
+        所以要像 SysStudentScoreResult 一样，显式告诉 MyBatis：
+        每个数据库列该填充到哪个 VO 属性里。
+    -->
+    <resultMap type="com.ruoyi.system.domain.vo.SysStudentScoreTrendVo" id="SysStudentScoreTrendResult">
+        <id     property="scoreId"      column="score_id"      />
+        <result property="studentId"    column="student_id"    />
+        <result property="studentNo"    column="student_no"    />
+        <result property="studentName"  column="student_name"  />
+        <result property="grade"        column="grade"         />
+        <result property="className"    column="class_name"    />
+        <result property="examName"     column="exam_name"     />
+        <result property="totalScore"   column="total_score"   />
+        <result property="averageScore" column="average_score" />
+        <result property="classRank"    column="class_rank"    />
+        <result property="gradeRank"    column="grade_rank"    />
+        <result property="createTime"   column="create_time"   />
+    </resultMap>
+
+    <!--
         公共查询片段：列表、详情、导出都需要这一段 select + join。
 
         ss 是 sys_student_score 的别名，表示成绩表；
@@ -233,7 +259,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         2. 再筛选出当前学生；
         3. 按 create_time、score_id 正序排列，前端就可以画趋势线。
     -->
-    <select id="selectStudentScoreTrendList" parameterType="Long" resultType="com.ruoyi.system.domain.vo.SysStudentScoreTrendVo">
+    <select id="selectStudentScoreTrendList" parameterType="Long" resultMap="SysStudentScoreTrendResult">
         <include refid="selectRankedStudentScoreVo"/>
         where base.student_id = #{studentId}
         order by base.create_time asc, base.score_id asc
