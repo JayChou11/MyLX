@@ -97,6 +97,19 @@ public class SysStudentScoreController extends BaseController
     }
 
     /**
+     * 查询学生成绩预警列表。
+     *
+     * 这个接口返回的是 Service 层根据规则计算出来的预警结果，
+     * 例如单科不及格、低于班级均分、排名下降等。
+     */
+    @PreAuthorize("@ss.hasPermi('system:studentScore:query')")
+    @GetMapping("/warning")
+    public AjaxResult warning(SysStudentScore studentScore)
+    {
+        return success(studentScoreService.selectStudentScoreWarningList(studentScore));
+    }
+
+    /**
      * 导出学生成绩列表
      *
      * 如果 scoreIds 有值，表示用户点的是“选择导出”，只导出勾选的数据；

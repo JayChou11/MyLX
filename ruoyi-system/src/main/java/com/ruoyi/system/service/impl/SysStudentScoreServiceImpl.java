@@ -2,11 +2,15 @@ package com.ruoyi.system.service.impl;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
@@ -16,6 +20,7 @@ import com.ruoyi.system.domain.SysStudent;
 import com.ruoyi.system.domain.SysStudentScore;
 import com.ruoyi.system.domain.vo.SysStudentScoreClassStat;
 import com.ruoyi.system.domain.vo.SysStudentScoreTrendVo;
+import com.ruoyi.system.domain.vo.SysStudentScoreWarningVo;
 import com.ruoyi.system.mapper.SysStudentMapper;
 import com.ruoyi.system.mapper.SysStudentScoreMapper;
 import com.ruoyi.system.service.ISysStudentScoreService;
@@ -42,6 +47,12 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
      * 使用 BigDecimal 而不是 double，是为了避免小数精度问题。
      */
     private static final BigDecimal THREE = new BigDecimal("3");
+
+    /** 单科及格线 */
+    private static final BigDecimal PASS_LINE = new BigDecimal("60");
+
+    /** 班均预警线：低于班均 20 分时触发 */
+    private static final BigDecimal WARNING_GAP = new BigDecimal("20");
 
     @Autowired
     private SysStudentScoreMapper studentScoreMapper;
@@ -83,6 +94,43 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         // 趋势分析必须依附于具体学生，所以先校验学生存在，再去查该学生的多次考试成绩。
         checkStudentExists(studentId);
         return studentScoreMapper.selectStudentScoreTrendList(studentId);
+    }
+
+    @Override
+    public List<SysStudentScoreWarningVo> selectStudentScoreWarningList(SysStudentScore studentScore)
+    {
+        // 预警列表复用现有成绩列表查询，这样前端传进来的筛选条件仍然有效。
+        List<SysStudentScore> scoreList = studentScoreMapper.selectStudentScoreList(studentScore);
+        if (scoreList == null || scoreList.isEmpty())
+        {
+            return new ArrayList<>();
+        }
+
+        Map<String, SysStudentScoreClassStat> classStatCache = new HashMap<>();
+        Map<Long, List<SysStudentScoreTrendVo>> trendCache = new HashMap<>();
+        List<SysStudentScoreWarningVo> warningList = new ArrayList<>();
+
+        for (SysStudentScore score : scoreList)
+        {
+            SysStudentScoreWarningVo warningVo = new SysStudentScoreWarningVo();
+            BeanUtils.copyProperties(score, warningVo);
+
+            List<String> warningTypes = new ArrayList<>();
+            List<String> warningReasons = new ArrayList<>();
+
+            addSubjectWarning(score, warningTypes, warningReasons);
+            addClassAverageWarning(score, classStatCache, warningVo, warningTypes, warningReasons);
+            addRankDropWarning(score, trendCache, warningVo, warningTypes, warningReasons);
+
+            if (!warningTypes.isEmpty())
+            {
+                warningVo.setWarningTypes(String.join("、", warningTypes));
+                warningVo.setWarningReason(String.join("；", warningReasons));
+                warningList.add(warningVo);
+            }
+        }
+
+        return warningList;
     }
 
     @Override
@@ -260,5 +308,155 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         studentScore.setTotalScore(totalScore);
         // 平均分保留两位小数，HALF_UP 表示四舍五入。
         studentScore.setAverageScore(totalScore.divide(THREE, 2, RoundingMode.HALF_UP));
+    }
+
+    /**
+     * 单科预警：任意一科低于 60 分就触发。
+     */
+    private void addSubjectWarning(SysStudentScore score, List<String> warningTypes, List<String> warningReasons)
+    {
+        List<String> lowSubjects = new ArrayList<>();
+        addIfBelowLine(lowSubjects, "语文", score.getChineseScore());
+        addIfBelowLine(lowSubjects, "数学", score.getMathScore());
+        addIfBelowLine(lowSubjects, "英语", score.getEnglishScore());
+        if (!lowSubjects.isEmpty())
+        {
+            warningTypes.add("单科不及格");
+            warningReasons.add(String.join("、", lowSubjects) + "低于60分");
+        }
+    }
+
+    /**
+     * 班均预警：当前学生总分比本班同场考试均分低 20 分以上就触发。
+     */
+    private void addClassAverageWarning(SysStudentScore score, Map<String, SysStudentScoreClassStat> classStatCache,
+            SysStudentScoreWarningVo warningVo, List<String> warningTypes, List<String> warningReasons)
+    {
+        if (score.getClassId() == null || StringUtils.isEmpty(score.getExamName()) || score.getTotalScore() == null)
+        {
+            return;
+        }
+
+        String cacheKey = score.getClassId() + "_" + score.getExamName();
+        SysStudentScoreClassStat classStat = classStatCache.get(cacheKey);
+        if (classStat == null)
+        {
+            SysStudentScore query = new SysStudentScore();
+            query.setClassId(score.getClassId());
+            query.setExamName(score.getExamName());
+            query.setGrade(score.getGrade());
+            List<SysStudentScoreClassStat> classStats = studentScoreMapper.selectStudentScoreClassStatList(query);
+            if (classStats != null && !classStats.isEmpty())
+            {
+                classStat = classStats.get(0);
+                classStatCache.put(cacheKey, classStat);
+            }
+        }
+        if (classStat == null || classStat.getAvgScore() == null)
+        {
+            return;
+        }
+
+        BigDecimal classAvgTotalScore = classStat.getAvgScore().multiply(THREE).setScale(2, RoundingMode.HALF_UP);
+        warningVo.setClassAvgTotalScore(classAvgTotalScore);
+
+        BigDecimal gap = classAvgTotalScore.subtract(score.getTotalScore()).setScale(2, RoundingMode.HALF_UP);
+        if (gap.compareTo(WARNING_GAP) >= 0)
+        {
+            warningTypes.add("低于班均20分");
+            warningReasons.add("总分比班级平均分低" + gap + "分");
+        }
+    }
+
+    /**
+     * 排名下降预警：当前考试排名比上一次考试更靠后就触发。
+     */
+    private void addRankDropWarning(SysStudentScore score, Map<Long, List<SysStudentScoreTrendVo>> trendCache,
+            SysStudentScoreWarningVo warningVo, List<String> warningTypes, List<String> warningReasons)
+    {
+        if (score.getStudentId() == null)
+        {
+            return;
+        }
+
+        List<SysStudentScoreTrendVo> trendList = trendCache.get(score.getStudentId());
+        if (trendList == null)
+        {
+            trendList = studentScoreMapper.selectStudentScoreTrendList(score.getStudentId());
+            trendCache.put(score.getStudentId(), trendList);
+        }
+        if (trendList == null || trendList.size() < 2)
+        {
+            return;
+        }
+
+        int index = findTrendIndex(trendList, score.getScoreId());
+        if (index <= 0)
+        {
+            return;
+        }
+
+        SysStudentScoreTrendVo current = trendList.get(index);
+        SysStudentScoreTrendVo previous = trendList.get(index - 1);
+        StringBuilder reason = new StringBuilder();
+        boolean dropped = false;
+
+        if (isRankDropped(current.getClassRank(), previous.getClassRank()))
+        {
+            warningVo.setPreviousClassRank(previous.getClassRank());
+            reason.append("班级排名从第").append(previous.getClassRank()).append("名下降到第")
+                .append(current.getClassRank()).append("名");
+            dropped = true;
+        }
+
+        if (isRankDropped(current.getGradeRank(), previous.getGradeRank()))
+        {
+            warningVo.setPreviousGradeRank(previous.getGradeRank());
+            if (dropped)
+            {
+                reason.append("，");
+            }
+            reason.append("年级排名从第").append(previous.getGradeRank()).append("名下降到第")
+                .append(current.getGradeRank()).append("名");
+            dropped = true;
+        }
+
+        if (dropped)
+        {
+            warningTypes.add("排名下降");
+            warningReasons.add(reason.toString());
+        }
+    }
+
+    /** 如果某一科低于及格线，就把科目名称记下来。 */
+    private void addIfBelowLine(List<String> lowSubjects, String subjectName, BigDecimal score)
+    {
+        if (score != null && score.compareTo(PASS_LINE) < 0)
+        {
+            lowSubjects.add(subjectName);
+        }
+    }
+
+    /** 在趋势列表里找到当前成绩对应的位置。 */
+    private int findTrendIndex(List<SysStudentScoreTrendVo> trendList, Long scoreId)
+    {
+        if (scoreId == null)
+        {
+            return -1;
+        }
+        for (int i = 0; i < trendList.size(); i++)
+        {
+            if (scoreId.equals(trendList.get(i).getScoreId()))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** 排名数字越大表示越靠后，所以 current > previous 就表示下降。 */
+    private boolean isRankDropped(Long currentRank, Long previousRank)
+    {
+        return currentRank != null && previousRank != null && currentRank.longValue() > previousRank.longValue();
     }
 }

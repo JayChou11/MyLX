@@ -89,6 +89,9 @@
       <el-col :span="1.5">
         <el-button type="primary" plain icon="TrendCharts" :disabled="single" @click="handleTrend" v-hasPermi="['system:studentScore:query']">成绩分析</el-button>
       </el-col>
+      <el-col :span="1.5">
+        <el-button type="danger" plain icon="WarningFilled" @click="handleWarning" v-hasPermi="['system:studentScore:query']">成绩预警</el-button>
+      </el-col>
       <right-toolbar v-model:showSearch="showSearch" @queryTable="getList"></right-toolbar>
     </el-row>
 
@@ -258,6 +261,26 @@
         <el-button @click="trendOpen = false">关 闭</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog title="成绩预警" v-model="warningOpen" width="1180px" append-to-body>
+      <div v-loading="warningLoading">
+        <el-table :data="warningList" size="small" border>
+          <el-table-column label="学号" align="center" prop="studentNo" width="120" />
+          <el-table-column label="姓名" align="center" prop="studentName" width="90" />
+          <el-table-column label="年级" align="center" prop="grade" width="90" />
+          <el-table-column label="班级" align="center" prop="className" width="110" />
+          <el-table-column label="考试名称" align="center" prop="examName" min-width="150" show-overflow-tooltip />
+          <el-table-column label="总分" align="center" prop="totalScore" width="90" />
+          <el-table-column label="班级排名" align="center" prop="classRank" width="95" />
+          <el-table-column label="年级排名" align="center" prop="gradeRank" width="95" />
+          <el-table-column label="预警类型" align="center" prop="warningTypes" min-width="160" show-overflow-tooltip />
+          <el-table-column label="预警原因" align="center" prop="warningReason" min-width="280" show-overflow-tooltip />
+        </el-table>
+      </div>
+      <template #footer>
+        <el-button @click="warningOpen = false">关 闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -266,7 +289,7 @@ import * as echarts from "echarts"
 import ExcelImportDialog from "@/components/ExcelImportDialog"
 import { listStudent } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
-import { listStudentScore, getStudentScore, delStudentScore, addStudentScore, updateStudentScore, listStudentScoreClassStats, listStudentScoreTrend } from "@/api/system/studentScore"
+import { listStudentScore, getStudentScore, delStudentScore, addStudentScore, updateStudentScore, listStudentScoreClassStats, listStudentScoreTrend, listStudentScoreWarning } from "@/api/system/studentScore"
 
 const { proxy } = getCurrentInstance()
 
@@ -298,6 +321,9 @@ const title = ref("")
 const classStatsOpen = ref(false)
 const classStatsLoading = ref(false)
 const classStatsList = ref([])
+const warningOpen = ref(false)
+const warningLoading = ref(false)
+const warningList = ref([])
 // 成绩趋势分析弹窗状态。
 // trendOpen 控制弹窗显示隐藏；trendLoading 控制接口加载时的遮罩；
 // trendList 保存后端返回的多次考试记录；trendStudent 保存当前正在分析的学生基础信息。
@@ -490,6 +516,19 @@ function handleExportSelected() {
 /** 打开导入弹窗 */
 function handleImport() {
   proxy.$refs["importScoreRef"].open()
+}
+
+/** 打开成绩预警弹窗 */
+function handleWarning() {
+  warningOpen.value = true
+  warningLoading.value = true
+  warningList.value = []
+  // 预警接口复用当前查询条件，这样页面上筛选出来的成绩范围和预警结果保持一致。
+  listStudentScoreWarning(queryParams.value).then(response => {
+    warningList.value = response.data || []
+  }).finally(() => {
+    warningLoading.value = false
+  })
 }
 
 /** 查询并打开班级成绩统计弹窗 */

@@ -39,6 +39,16 @@ export function listStudentScoreTrend(studentId) {
   })
 }
 
+// 查询学生成绩预警
+// query 复用成绩列表的筛选条件，例如年级、班级、考试名称。
+export function listStudentScoreWarning(query) {
+  return request({
+    url: '/system/studentScore/warning',
+    method: 'get',
+    params: query
+  })
+}
+
 // 新增学生成绩
 // data 放在请求体里，对应后端 @RequestBody SysStudentScore。
 export function addStudentScore(data) {
