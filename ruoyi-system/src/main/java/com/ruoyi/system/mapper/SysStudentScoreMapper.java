@@ -75,14 +75,14 @@ public interface SysStudentScoreMapper
      * 根据学生和考试名称查询成绩
      *
      * 这里有两个普通参数，所以要用 @Param 起名字。
-     * 如果不写 @Param，XML 中的 #{studentId}、#{examName} 可能找不到对应参数名。
+     * 如果不写 @Param，XML 中的 #{studentId}、#{examId} 可能找不到对应参数名。
      *
      * @param studentId 学生ID
-     * @param examName 考试名称
+     * @param examId 考试ID
      * @return 学生成绩
      */
     public SysStudentScore selectStudentScoreByStudentAndExam(@Param("studentId") Long studentId,
-            @Param("examName") String examName);
+            @Param("examId") Long examId);
 
     /**
      * 新增学生成绩

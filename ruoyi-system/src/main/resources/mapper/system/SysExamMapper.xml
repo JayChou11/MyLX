@@ -43,6 +43,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         limit 1
     </select>
 
+    <!-- 根据名称和年级查找考试 -->
+    <select id="selectSysExamByNameAndGrade" resultMap="SysExamResult">
+        <include refid="selectSysExamVo"/>
+        where exam_name = #{examName}
+            and grade = #{grade}
+    </select>
+
     <insert id="insertSysExam" parameterType="SysExam" useGeneratedKeys="true" keyProperty="examId">
         insert into sys_exam
         <trim prefix="(" suffix=")" suffixOverrides=",">

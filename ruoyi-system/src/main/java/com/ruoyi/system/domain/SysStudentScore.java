@@ -1,6 +1,8 @@
 package com.ruoyi.system.domain;
 
 import java.math.BigDecimal;
+import java.util.Date;
+
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 import com.ruoyi.common.annotation.Excel;
@@ -29,6 +31,13 @@ public class SysStudentScore extends BaseEntity
 
     /** 成绩ID */
     private Long scoreId;
+
+    /** 考试ID */
+    private Long examId;
+
+    private Date examDate;
+
+    private String semester;
 
     /**
      * 学生ID
@@ -116,6 +125,30 @@ public class SysStudentScore extends BaseEntity
     public void setScoreId(Long scoreId)
     {
         this.scoreId = scoreId;
+    }
+
+    public Long getExamId() {
+        return examId;
+    }
+
+    public void setExamId(Long examId) {
+        this.examId = examId;
+    }
+
+    public Date getExamDate() {
+        return examDate;
+    }
+
+    public void setExamDate(Date examDate) {
+        this.examDate = examDate;
+    }
+
+    public String getSemester() {
+        return semester;
+    }
+
+    public void setSemester(String semester) {
+        this.semester = semester;
     }
 
     public Long getStudentId()

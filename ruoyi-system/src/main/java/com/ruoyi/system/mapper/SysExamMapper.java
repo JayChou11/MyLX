@@ -3,6 +3,7 @@ package com.ruoyi.system.mapper;
 import com.ruoyi.system.domain.SysExam;
 
 import java.util.List;
+import org.apache.ibatis.annotations.Param;
 
 /**
  * 考试批次信息Mapper接口
@@ -29,6 +30,9 @@ public interface SysExamMapper
     public List<SysExam> selectSysExamList(SysExam sysExam);
 
     public SysExam selectSysExamByNameGradeSemester(SysExam sysExam);
+
+    public List<SysExam> selectSysExamByNameAndGrade(@Param("examName") String examName,
+            @Param("grade") String grade);
 
     /**
      * 新增考试信息

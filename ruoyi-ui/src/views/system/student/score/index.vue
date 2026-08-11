@@ -108,6 +108,12 @@
       <el-table-column label="年级" align="center" prop="grade" min-width="100" />
       <el-table-column label="班级" align="center" prop="className" min-width="110" />
       <el-table-column label="考试名称" align="center" prop="examName" min-width="150" show-overflow-tooltip />
+      <el-table-column label="学期" align="center" prop="semester" min-width="100" />
+      <el-table-column label="考试日期" align="center" prop="examDate" width="120">
+        <template #default="scope">
+          <span>{{ parseTime(scope.row.examDate, '{y}-{m}-{d}') }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="语文" align="center" prop="chineseScore" width="90" />
       <el-table-column label="数学" align="center" prop="mathScore" width="90" />
       <el-table-column label="英语" align="center" prop="englishScore" width="90" />
@@ -145,7 +151,7 @@
             学生下拉框展示“学号 - 姓名（年级班级）”，但真正提交的是 studentId。
             这样数据库能稳定用 student_id 建关联，不受姓名重复或改名影响。
           -->
-          <el-select v-model="form.studentId" filterable placeholder="请选择学生" style="width: 100%">
+          <el-select v-model="form.studentId" filterable placeholder="请选择学生" style="width: 100%" @change="handleFormStudentChange">
             <el-option
               v-for="item in studentOptions"
               :key="item.studentId"
@@ -154,8 +160,15 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="考试名称" prop="examName">
-          <el-input v-model="form.examName" placeholder="例如：2026春季期中考试" maxlength="100" />
+        <el-form-item label="考试批次" prop="examId">
+          <el-select v-model="form.examId" filterable placeholder="请选择考试批次" style="width: 100%" @change="handleExamChange">
+            <el-option
+              v-for="item in filteredExamOptions"
+              :key="item.examId"
+              :label="formatExamOption(item)"
+              :value="item.examId"
+            />
+          </el-select>
         </el-form-item>
         <el-row>
           <el-col :span="8">
@@ -289,6 +302,8 @@ import * as echarts from "echarts"
 import ExcelImportDialog from "@/components/ExcelImportDialog"
 import { listStudent } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
+import { listExam } from "@/api/system/exam"
+import { parseTime } from "@/utils/ruoyi"
 import { listStudentScore, getStudentScore, delStudentScore, addStudentScore, updateStudentScore, listStudentScoreClassStats, listStudentScoreTrend, listStudentScoreWarning } from "@/api/system/studentScore"
 
 const { proxy } = getCurrentInstance()
@@ -297,6 +312,8 @@ const { proxy } = getCurrentInstance()
 const scoreList = ref([])
 // 学生下拉选项：新增/修改成绩时选择学生使用。
 const studentOptions = ref([])
+// 考试批次下拉选项：新增/修改成绩时提交 examId，考试名称只作为展示和兼容字段。
+const examOptions = ref([])
 // 当前查询年级下的班级下拉选项。
 const classOptions = ref([])
 // 年级下拉选项，从班级列表中提取并去重。
@@ -352,7 +369,7 @@ const data = reactive({
   // 前端表单校验。注意：后端实体上也有校验，前端校验只是提前拦截，不能替代后端校验。
   rules: {
     studentId: [{ required: true, message: "学生不能为空", trigger: "change" }],
-    examName: [{ required: true, message: "考试名称不能为空", trigger: "blur" }],
+    examId: [{ required: true, message: "考试批次不能为空", trigger: "change" }],
     chineseScore: [{ required: true, message: "语文成绩不能为空", trigger: "blur" }],
     mathScore: [{ required: true, message: "数学成绩不能为空", trigger: "blur" }],
     englishScore: [{ required: true, message: "英语成绩不能为空", trigger: "blur" }]
@@ -360,6 +377,14 @@ const data = reactive({
 })
 
 const { queryParams, form, rules } = toRefs(data)
+
+const filteredExamOptions = computed(() => {
+  const student = studentOptions.value.find(item => item.studentId === form.value.studentId)
+  if (!student || !student.grade) {
+    return examOptions.value
+  }
+  return examOptions.value.filter(item => item.grade === student.grade)
+})
 
 /** 查询成绩列表 */
 function getList() {
@@ -377,6 +402,13 @@ function loadStudentOptions() {
   // 这里复用学生列表接口。用于学习阶段数据量不大可以这样做；真实大数据量项目通常会做远程搜索。
   listStudent({}).then(response => {
     studentOptions.value = response.rows || []
+  })
+}
+
+/** 加载考试批次下拉选项 */
+function loadExamOptions() {
+  listExam({ pageNum: 1, pageSize: 1000, examStatus: "0" }).then(response => {
+    examOptions.value = response.rows || []
   })
 }
 
@@ -426,13 +458,35 @@ function reset() {
   form.value = {
     scoreId: undefined,
     studentId: undefined,
+    examId: undefined,
     examName: undefined,
     chineseScore: undefined,
     mathScore: undefined,
     englishScore: undefined,
     remark: undefined
   }
-  proxy.resetForm("scoreRef")
+}
+
+function formatExamOption(item) {
+  const examDate = item.examDate ? parseTime(item.examDate, "{y}-{m}-{d}") : "-"
+  return `${item.examName} - ${item.grade} - ${item.semester} - ${examDate}`
+}
+
+function handleExamChange(examId) {
+  const exam = examOptions.value.find(item => item.examId === examId)
+  form.value.examName = exam ? exam.examName : undefined
+}
+
+function handleFormStudentChange() {
+  if (!form.value.examId) {
+    return
+  }
+  const selectedExam = examOptions.value.find(item => item.examId === form.value.examId)
+  const selectedStudent = studentOptions.value.find(item => item.studentId === form.value.studentId)
+  if (selectedExam && selectedStudent && selectedStudent.grade && selectedExam.grade !== selectedStudent.grade) {
+    form.value.examId = undefined
+    form.value.examName = undefined
+  }
 }
 
 /** 打开新增弹窗 */
@@ -440,6 +494,9 @@ function handleAdd() {
   reset()
   open.value = true
   title.value = "添加学生成绩"
+  nextTick(() => {
+    proxy.resetForm("scoreRef")
+  })
 }
 
 /** 打开修改弹窗 */
@@ -451,6 +508,9 @@ function handleUpdate(row) {
     form.value = response.data
     open.value = true
     title.value = "修改学生成绩"
+    nextTick(() => {
+      proxy.resetForm("scoreRef")
+    })
   })
 }
 
@@ -660,6 +720,7 @@ onBeforeUnmount(() => {
 
 // 页面初始化：先准备下拉选项，再加载表格数据。
 loadStudentOptions()
+loadExamOptions()
 loadGradeOptions()
 getList()
 </script>

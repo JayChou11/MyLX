@@ -6,6 +6,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import com.ruoyi.system.domain.SysClass;
+import com.ruoyi.system.domain.SysExam;
+import com.ruoyi.system.mapper.SysClassMapper;
+import com.ruoyi.system.mapper.SysExamMapper;
 import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -59,6 +64,12 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
 
     @Autowired
     private SysStudentMapper studentMapper;
+
+    @Autowired
+    private SysExamMapper examMapper;
+
+    @Autowired
+    private SysClassMapper classMapper;
 
     @Autowired
     protected Validator validator;
@@ -138,6 +149,7 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
     {
         // 新增时先确认学生存在，否则可能插入一条挂不到学生档案上的“脏成绩”。
         checkStudentExists(studentScore.getStudentId());
+        checkExamExists(studentScore.getExamId());
         // 再校验唯一性，避免同一学生同一场考试录入多条成绩。
         checkScoreUniqueOrThrow(studentScore);
         // 总分、平均分永远由后端计算，不信任前端传来的 totalScore/averageScore。
@@ -150,6 +162,7 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
     {
         // 修改时也允许换学生或考试名称，所以仍然要重新校验学生存在和唯一性。
         checkStudentExists(studentScore.getStudentId());
+        checkExamExists(studentScore.getExamId());
         checkScoreUniqueOrThrow(studentScore);
         fillTotalAndAverageScore(studentScore);
         return studentScoreMapper.updateStudentScore(studentScore);
@@ -174,7 +187,7 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         // 修改时 scoreId 不为空，如果查出来的重复记录就是自己，则仍然算唯一。
         Long scoreId = StringUtils.isNull(studentScore.getScoreId()) ? -1L : studentScore.getScoreId();
         SysStudentScore info = studentScoreMapper.selectStudentScoreByStudentAndExam(studentScore.getStudentId(),
-                studentScore.getExamName());
+                studentScore.getExamId());
         return StringUtils.isNull(info) || info.getScoreId().longValue() == scoreId.longValue();
     }
 
@@ -206,12 +219,16 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
                 // 这样用户更容易理解，后端再根据学号找到真正的 student_id。
                 SysStudent student = resolveImportStudent(score);
                 score.setStudentId(student.getStudentId());
+                // 考试批次的唯一性校验
+                SysExam exam = resolveImportExam(student, score);
+                score.setExamId(exam.getExamId());
+                score.setExamName(exam.getExamName());
                 // 手动触发实体上的注解校验，例如考试名称不能为空、分数必须在 0-100。
                 BeanValidators.validateWithException(validator, score);
                 // 即使 Excel 里有总分/平均分列，也以这里重新计算的结果为准。
                 fillTotalAndAverageScore(score);
                 SysStudentScore existScore = studentScoreMapper.selectStudentScoreByStudentAndExam(score.getStudentId(),
-                        score.getExamName());
+                        score.getExamId());
                 if (StringUtils.isNull(existScore))
                 {
                     // 不存在：走新增逻辑。
@@ -270,6 +287,20 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         }
     }
 
+    //  根据 examId 校验考试是否存在
+    private void checkExamExists(Long examId)
+    {
+        if (StringUtils.isNull(examId))
+        {
+            throw new ServiceException("请选择考试");
+        }
+        // 这里复用学生模块已有 Mapper，不重新写一条只查学生是否存在的 SQL。
+        if (examMapper.selectSysExamByExamId(examId) == null)
+        {
+            throw new ServiceException("考试不存在");
+        }
+    }
+
     private void checkScoreUniqueOrThrow(SysStudentScore studentScore)
     {
         // 用一个小方法包住唯一性校验，是为了新增、修改时都能复用同一句错误提示。
@@ -277,6 +308,35 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         {
             throw new ServiceException("该学生的本次考试成绩已存在");
         }
+    }
+
+    // 校验考试批次
+    private SysExam resolveImportExam(SysStudent student, SysStudentScore score)
+    {
+        if (StringUtils.isEmpty(score.getExamName()))
+        {
+            throw new ServiceException("考试名称不能为空");
+        }
+
+        SysClass studentClass = classMapper.selectClassByClassId(student.getClassId());
+        if (studentClass == null)
+        {
+            throw new ServiceException("学生班级不存在");
+        }
+
+        List<SysExam> examList = examMapper.selectSysExamByNameAndGrade(score.getExamName(), studentClass.getGrade());
+
+        if (examList == null || examList.isEmpty())
+        {
+            throw new ServiceException("考试批次不存在：" + score.getExamName() + "，年级：" + studentClass.getGrade());
+        }
+
+        if (examList.size() > 1)
+        {
+            throw new ServiceException("考试批次不唯一：" + score.getExamName() + "，年级：" + studentClass.getGrade() + "，请在考试名称中区分学期或年份");
+        }
+
+        return examList.get(0);
     }
 
     private SysStudent resolveImportStudent(SysStudentScore score)

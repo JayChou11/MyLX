@@ -12,6 +12,9 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     -->
     <resultMap type="SysStudentScore" id="SysStudentScoreResult">
         <id     property="scoreId"      column="score_id"      />
+        <result property="examId" column="exam_id" />
+        <result property="semester"    column="semester"    />
+        <result property="examDate"    column="exam_date"    />
         <result property="studentId"    column="student_id"    />
         <result property="studentNo"    column="student_no"    />
         <result property="studentName"  column="student_name"  />
@@ -70,14 +73,16 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         所以这里通过 left join 把页面展示需要的信息一起查出来。
     -->
     <sql id="selectStudentScoreVo">
-        select ss.score_id, ss.student_id, s.student_no, s.student_name,
+        select ss.score_id, ss.exam_id, ss.student_id, s.student_no, s.student_name,
                c.grade, c.class_id, c.class_name,
-               ss.exam_name, ss.chinese_score, ss.math_score, ss.english_score,
+               ss.chinese_score, ss.math_score, ss.english_score,
                ss.total_score, ss.average_score,
-               ss.create_by, ss.create_time, ss.update_by, ss.update_time, ss.remark
+               ss.create_by, ss.create_time, ss.update_by, ss.update_time, ss.remark,
+               coalesce(e.exam_name, ss.exam_name) as exam_name, e.semester, e.exam_date
         from sys_student_score ss
         left join sys_student s on ss.student_id = s.student_id
         left join sys_class c on s.class_id = c.class_id
+        left join sys_exam e on ss.exam_id = e.exam_id
     </sql>
 
     <!--
@@ -111,7 +116,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                    from sys_student_score higher_class
                    inner join sys_student higher_class_student on higher_class.student_id = higher_class_student.student_id
                    inner join sys_class higher_class_info on higher_class_student.class_id = higher_class_info.class_id
-                   where higher_class.exam_name = base.exam_name
+                   where higher_class.exam_id = base.exam_id
                      and higher_class_info.class_id = base.class_id
                      and (
                          higher_class.average_score &gt; base.average_score
@@ -126,7 +131,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                    from sys_student_score higher_grade
                    inner join sys_student higher_grade_student on higher_grade.student_id = higher_grade_student.student_id
                    inner join sys_class higher_grade_info on higher_grade_student.class_id = higher_grade_info.class_id
-                   where higher_grade.exam_name = base.exam_name
+                   where higher_grade.exam_id = base.exam_id
                      and higher_grade_info.grade = base.grade
                      and (
                          higher_grade.average_score &gt; base.average_score
@@ -213,7 +218,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         select c.class_id as classId,
                c.grade,
                c.class_name as className,
-               ss.exam_name as examName,
+               coalesce(e.exam_name, ss.exam_name) as examName,
                count(ss.score_id) as studentCount,
                round(avg(ss.chinese_score), 2) as avgChineseScore,
                round(avg(ss.math_score), 2) as avgMathScore,
@@ -231,9 +236,10 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         -->
         inner join sys_student s on ss.student_id = s.student_id
         inner join sys_class c on s.class_id = c.class_id
+        left join sys_exam e on ss.exam_id = e.exam_id
         <where>
             <if test="examName != null and examName != ''">
-                and ss.exam_name like concat('%', #{examName}, '%')
+                and coalesce(e.exam_name, ss.exam_name) like concat('%', #{examName}, '%')
             </if>
             <if test="classId != null">
                 and c.class_id = #{classId}
@@ -247,8 +253,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             这里一组就是：同一个班级 + 同一个考试名称。
             每组里可能有很多学生成绩，avg/max/min/count/sum 都是在组内计算。
         -->
-        group by c.class_id, c.grade, c.class_name, ss.exam_name
-        order by c.grade asc, c.class_name asc, ss.exam_name desc
+        group by c.class_id, c.grade, c.class_name, ss.exam_id, coalesce(e.exam_name, ss.exam_name)
+        order by c.grade asc, c.class_name asc, coalesce(e.exam_name, ss.exam_name) desc
     </select>
 
     <!--
@@ -262,18 +268,19 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     <select id="selectStudentScoreTrendList" parameterType="Long" resultMap="SysStudentScoreTrendResult">
         <include refid="selectRankedStudentScoreVo"/>
         where base.student_id = #{studentId}
-        order by base.create_time asc, base.score_id asc
+        order by base.exam_date asc, base.score_id asc
     </select>
 
     <!--
         唯一性校验查询。
         业务规则是：同一个 student_id + exam_name 只能存在一条成绩。
+        修改为：同一个 student_id + exam_id 只能存在一条成绩。
         新增、修改、导入覆盖都会用到这条 SQL。
     -->
     <select id="selectStudentScoreByStudentAndExam" resultMap="SysStudentScoreResult">
         <include refid="selectStudentScoreVo"/>
         where ss.student_id = #{studentId}
-          and ss.exam_name = #{examName}
+          and ss.exam_id = #{examId}
         limit 1
     </select>
 
@@ -284,13 +291,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     -->
     <insert id="insertStudentScore" parameterType="SysStudentScore" useGeneratedKeys="true" keyProperty="scoreId">
         insert into sys_student_score(
-            student_id, exam_name, chinese_score, math_score, english_score,
+            student_id, exam_id, exam_name, chinese_score, math_score, english_score,
             total_score, average_score,
             <if test="remark != null and remark != ''">remark,</if>
             <if test="createBy != null and createBy != ''">create_by,</if>
             create_time
         ) values (
-            #{studentId}, #{examName}, #{chineseScore}, #{mathScore}, #{englishScore},
+            #{studentId}, #{examId}, #{examName}, #{chineseScore}, #{mathScore}, #{englishScore},
             #{totalScore}, #{averageScore},
             <if test="remark != null and remark != ''">#{remark},</if>
             <if test="createBy != null and createBy != ''">#{createBy},</if>
@@ -307,6 +314,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         update sys_student_score
         <set>
             <if test="studentId != null">student_id = #{studentId},</if>
+            <if test="examId != null">exam_id = #{examId},</if>
             <if test="examName != null and examName != ''">exam_name = #{examName},</if>
             <if test="chineseScore != null">chinese_score = #{chineseScore},</if>
             <if test="mathScore != null">math_score = #{mathScore},</if>
