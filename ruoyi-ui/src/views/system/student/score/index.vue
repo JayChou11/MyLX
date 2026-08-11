@@ -300,7 +300,7 @@
 <script setup name="StudentScore">
 import * as echarts from "echarts"
 import ExcelImportDialog from "@/components/ExcelImportDialog"
-import { listStudent } from "@/api/system/student"
+import { optionSelect } from "@/api/system/student"
 import { optionselectClass } from "@/api/system/class"
 import { listExam } from "@/api/system/exam"
 import { parseTime } from "@/utils/ruoyi"
@@ -400,8 +400,8 @@ function getList() {
 /** 加载学生下拉选项 */
 function loadStudentOptions() {
   // 这里复用学生列表接口。用于学习阶段数据量不大可以这样做；真实大数据量项目通常会做远程搜索。
-  listStudent({}).then(response => {
-    studentOptions.value = response.rows || []
+  optionSelect().then(response => {
+    studentOptions.value = response.data || []
   })
 }
 
@@ -495,7 +495,7 @@ function handleAdd() {
   open.value = true
   title.value = "添加学生成绩"
   nextTick(() => {
-    proxy.resetForm("scoreRef")
+    proxy.$refs["scoreRef"]?.clearValidate()
   })
 }
 
@@ -509,7 +509,7 @@ function handleUpdate(row) {
     open.value = true
     title.value = "修改学生成绩"
     nextTick(() => {
-      proxy.resetForm("scoreRef")
+      proxy.$refs["scoreRef"]?.clearValidate()
     })
   })
 }

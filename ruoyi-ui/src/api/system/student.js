@@ -9,6 +9,14 @@ export function listStudent(query) {
   })
 }
 
+// 查询学生下拉框
+export function optionSelect() {
+  return request({
+    url: '/system/student/optionSelect',
+    method: 'get',
+  })
+}
+
 // 查询学生信息详细
 export function getStudent(studentId) {
   return request({

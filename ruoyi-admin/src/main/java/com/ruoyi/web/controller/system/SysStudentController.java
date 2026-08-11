@@ -63,6 +63,16 @@ public class SysStudentController extends BaseController
     }
 
     /**
+     * 查询学生下拉列表
+     */
+    @GetMapping("/optionSelect")
+    public AjaxResult optionSelect(SysStudent student)
+    {
+        List<SysStudent> list = studentService.selectStudentList(student);
+        return success(list);
+    }
+
+    /**
      * 查询学生班级统计
      */
     @PreAuthorize("@ss.hasPermi('system:student:list')")
