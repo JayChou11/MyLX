@@ -7,10 +7,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.ruoyi.system.domain.SysClass;
-import com.ruoyi.system.domain.SysExam;
-import com.ruoyi.system.mapper.SysClassMapper;
-import com.ruoyi.system.mapper.SysExamMapper;
+import com.ruoyi.common.utils.DateUtils;
+import com.ruoyi.system.domain.*;
+import com.ruoyi.system.mapper.*;
+import com.ruoyi.system.service.ISysClassService;
+import com.ruoyi.system.service.ISysWarningRecordService;
 import jakarta.validation.Validator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,13 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.common.utils.bean.BeanValidators;
-import com.ruoyi.system.domain.SysStudent;
-import com.ruoyi.system.domain.SysStudentScore;
 import com.ruoyi.system.domain.vo.SysStudentScoreClassStat;
 import com.ruoyi.system.domain.vo.SysStudentScoreTrendVo;
 import com.ruoyi.system.domain.vo.SysStudentScoreWarningVo;
-import com.ruoyi.system.mapper.SysStudentMapper;
-import com.ruoyi.system.mapper.SysStudentScoreMapper;
 import com.ruoyi.system.service.ISysStudentScoreService;
 
 /**
@@ -56,8 +53,11 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
     /** 单科及格线 */
     private static final BigDecimal PASS_LINE = new BigDecimal("60");
 
-    /** 班均预警线：低于班均 20 分时触发 */
+    /** 班均预警线-中：低于班均 20 分时触发 */
     private static final BigDecimal WARNING_GAP = new BigDecimal("20");
+
+    /** 班均预警线-高：低于班均 40 分时触发 */
+    private static final BigDecimal WARNING_GAP_HIGH = new BigDecimal("40");
 
     @Autowired
     private SysStudentScoreMapper studentScoreMapper;
@@ -70,6 +70,12 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
 
     @Autowired
     private SysClassMapper classMapper;
+
+    @Autowired
+    private SysWarningRecordMapper warningRecordMapper;
+
+    @Autowired
+    private ISysWarningRecordService warningRecordService;
 
     @Autowired
     protected Validator validator;
@@ -145,6 +151,7 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
     }
 
     @Override
+    @Transactional
     public int insertStudentScore(SysStudentScore studentScore)
     {
         // 新增时先确认学生存在，否则可能插入一条挂不到学生档案上的“脏成绩”。
@@ -154,10 +161,17 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         checkScoreUniqueOrThrow(studentScore);
         // 总分、平均分永远由后端计算，不信任前端传来的 totalScore/averageScore。
         fillTotalAndAverageScore(studentScore);
-        return studentScoreMapper.insertStudentScore(studentScore);
+        int rows = studentScoreMapper.insertStudentScore(studentScore);
+        // 插入成功后生成告警
+        if (rows > 0)
+        {
+            generateWarningRecords(studentScore);
+        }
+        return rows;
     }
 
     @Override
+    @Transactional
     public int updateStudentScore(SysStudentScore studentScore)
     {
         // 修改时也允许换学生或考试名称，所以仍然要重新校验学生存在和唯一性。
@@ -165,7 +179,13 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         checkExamExists(studentScore.getExamId());
         checkScoreUniqueOrThrow(studentScore);
         fillTotalAndAverageScore(studentScore);
-        return studentScoreMapper.updateStudentScore(studentScore);
+        int rows = studentScoreMapper.updateStudentScore(studentScore);
+        // 修改成功后生成告警
+        if (rows > 0)
+        {
+            generateWarningRecords(studentScore);
+        }
+        return rows;
     }
 
     @Override
@@ -233,7 +253,11 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
                 {
                     // 不存在：走新增逻辑。
                     score.setCreateBy(operName);
-                    studentScoreMapper.insertStudentScore(score);
+                    int rows = studentScoreMapper.insertStudentScore(score);
+                    // 拆入成功后生成告警
+                    if(rows > 0) {
+                        generateWarningRecords(score);
+                    }
                     successNum++;
                     successMsg.append("<br/>").append(successNum).append("、学号 ")
                         .append(score.getStudentNo()).append(" 的 ").append(score.getExamName()).append(" 导入成功");
@@ -244,6 +268,7 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
                     score.setScoreId(existScore.getScoreId());
                     score.setUpdateBy(operName);
                     studentScoreMapper.updateStudentScore(score);
+                    generateWarningRecords(score);
                     successNum++;
                     successMsg.append("<br/>").append(successNum).append("、学号 ")
                         .append(score.getStudentNo()).append(" 的 ").append(score.getExamName()).append(" 更新成功");
@@ -371,6 +396,150 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
     }
 
     /**
+     * 根据一条成绩生成预警记录。
+     * 总分 < 180：total_low，总分，总分低于180分
+     * 语文 < 60：subject_low，语文，语文低于60分
+     * 数学 < 60：subject_low，数学，数学低于60分
+     * 英语 < 60：subject_low，英语，英语低于60分
+     * 预警等级：
+     * 总分 < 120：3 高
+     * 总分 < 180：2 中
+     * 单科 < 40：3 高
+     * 单科 < 60：2 中
+     *
+     * 排名下降
+     * 班级排名下降：rank_drop  预警项目：班级排名
+     * 预警等级：
+     * 下降5名以上：中
+     * 下降10名以上：高
+     * 年级排名下降：rank_drop  预警项目：年级排名
+     * 预警等级：
+     * 下降5名以上：中
+     * 下降10名以上：高
+     *
+     * 低于班级平均分
+     * 低于班级平均分：average_low  预警项目：班级平均分
+     * 预警等级：
+     * 低于班级平均分20分以上：中
+     * 低于班级平均分40分以上：高
+     */
+    private void generateWarningRecords(SysStudentScore score)
+    {
+        BigDecimal passScore = BigDecimal.valueOf(60);
+        BigDecimal lowScore = BigDecimal.valueOf(40);
+        BigDecimal totalPassScore = BigDecimal.valueOf(180);
+        BigDecimal totalLowScore = BigDecimal.valueOf(120);
+
+        String warningType = "";
+        String warningLevel = "";
+        String warningItem = "";
+        String warningReason = "";
+
+        BigDecimal chineseScore = score.getChineseScore();
+        BigDecimal mathScore = score.getMathScore();
+        BigDecimal englishScore = score.getEnglishScore();
+        BigDecimal totalScore = score.getTotalScore();
+
+        // 单科预警
+        String[] names = { "语文", "数学", "英语" };
+        BigDecimal[] singleScores = { chineseScore, mathScore, englishScore };
+        for (int i = 0; i < singleScores.length; i++) {
+            if(isLessThan(singleScores[i], passScore)) {
+                warningType = "subject_low";
+                warningLevel = "2";
+                warningItem = names[i];
+                warningReason = warningItem + "成绩低于" + passScore + "分";
+
+                if(isLessThan(singleScores[i], lowScore)) {
+                    warningLevel = "3";
+                    warningReason = warningItem + "成绩低于" + lowScore + "分";
+                }
+
+                SysWarningRecord warningRecord = buildWarningRecord(score, warningType, warningLevel, warningItem, warningReason);
+                saveWarningIfAbsent(warningRecord);
+            }
+        }
+
+        // 总分预警
+        if(isLessThan(totalScore, totalPassScore)) {
+            warningType = "total_low";
+            warningLevel = "2";
+            warningItem = "总分";
+            warningReason = warningItem + "低于" + totalPassScore + "分";
+
+            if(totalScore.compareTo(totalLowScore) < 0) {
+                warningLevel = "3";
+                warningReason = warningItem + "低于" + totalLowScore + "分";
+            }
+
+            SysWarningRecord warningRecord = buildWarningRecord(score, warningType, warningLevel, warningItem, warningReason);
+            saveWarningIfAbsent(warningRecord);
+        }
+
+        // 这里要先去拿到年级，因为导入时没有学生的年级信息
+        if (score.getStudentId() != null && score.getClassId() == null) {
+            SysStudent student = studentMapper.selectStudentByStudentId(score.getStudentId());
+            if (student != null) {
+                score.setClassId(student.getClassId());
+            }
+        }
+
+        if (score.getClassId() != null && StringUtils.isEmpty(score.getGrade())) {
+            SysClass currentClass = classMapper.selectClassByClassId(score.getClassId());
+            if (currentClass != null) {
+                score.setGrade(currentClass.getGrade());
+            }
+        }
+
+        // 班均预警
+        addClassAverageWarningRecord(score);
+
+        // 排名预警
+        addRankDropWarningRecord(score);
+    }
+
+    private boolean isLessThan(BigDecimal value, BigDecimal threshold)
+    {
+        return value != null && threshold != null && value.compareTo(threshold) < 0;
+    }
+
+    private void saveWarningIfAbsent(SysWarningRecord record)
+    {
+        SysWarningRecord exists = warningRecordMapper.selectByScoreIdAndTypeAndItem(
+                record.getScoreId(),
+                record.getWarningType(),
+                record.getWarningItem()
+        );
+
+        if (exists == null)
+        {
+            warningRecordService.insertSysWarningRecord(record);
+        }
+    }
+
+    /**
+     * 构建预警对象。
+     */
+    private SysWarningRecord buildWarningRecord(SysStudentScore score,
+                                                String warningType,
+                                                String warningLevel,
+                                                String warningItem,
+                                                String warningReason)
+    {
+        SysWarningRecord record = new SysWarningRecord();
+        record.setScoreId(score.getScoreId());
+        record.setStudentId(score.getStudentId());
+        record.setExamId(score.getExamId());
+        record.setWarningType(warningType);
+        record.setWarningLevel(warningLevel);
+        record.setWarningItem(warningItem);
+        record.setWarningReason(warningReason);
+        record.setWarningStatus("0");
+        record.setCreateTime(DateUtils.getNowDate());
+        return record;
+    }
+
+    /**
      * 单科预警：任意一科低于 60 分就触发。
      */
     private void addSubjectWarning(SysStudentScore score, List<String> warningTypes, List<String> warningReasons)
@@ -403,7 +572,7 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         {
             SysStudentScore query = new SysStudentScore();
             query.setClassId(score.getClassId());
-            query.setExamName(score.getExamName());
+            query.setExamId(score.getExamId());
             query.setGrade(score.getGrade());
             List<SysStudentScoreClassStat> classStats = studentScoreMapper.selectStudentScoreClassStatList(query);
             if (classStats != null && !classStats.isEmpty())
@@ -425,6 +594,54 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         {
             warningTypes.add("低于班均20分");
             warningReasons.add("总分比班级平均分低" + gap + "分");
+        }
+    }
+
+    /**
+     * 班均预警记录
+     */
+    private void addClassAverageWarningRecord(SysStudentScore score)
+    {
+        SysStudentScore query = new SysStudentScore();
+        query.setExamId(score.getExamId());
+        query.setExamName(score.getExamName());
+        query.setGrade(score.getGrade());
+        List<SysStudentScoreClassStat> classStats = studentScoreMapper.selectStudentScoreClassStatList(query);
+        if (classStats != null && !classStats.isEmpty())
+        {
+            SysStudentScoreClassStat classStat = classStats.get(0);
+            if (classStat == null)
+            {
+                return;
+            }
+
+            if (classStat.getAvgScore() == null)
+            {
+                return;
+            }
+
+            BigDecimal classAvgTotalScore = classStat.getAvgScore().multiply(THREE).setScale(2, RoundingMode.HALF_UP);
+            BigDecimal gap = classAvgTotalScore.subtract(score.getTotalScore()).setScale(2, RoundingMode.HALF_UP);
+            if (gap.compareTo(WARNING_GAP) >= 0)
+            {
+                String warningType = "";
+                String warningLevel = "";
+                String warningItem = "";
+                String warningReason = "";
+
+                warningType = "average_low";
+                warningLevel = "2";
+                warningItem = "班级平均分";
+                warningReason = "总分比班级平均分低" + WARNING_GAP + "分以上";
+
+                if(gap.compareTo(WARNING_GAP_HIGH) >= 0) {
+                    warningLevel = "3";
+                    warningReason = "总分比班级平均分低" + WARNING_GAP_HIGH + "分以上";
+                }
+
+                SysWarningRecord warningRecord = buildWarningRecord(score, warningType, warningLevel, warningItem, warningReason);
+                saveWarningIfAbsent(warningRecord);
+            }
         }
     }
 
@@ -485,6 +702,68 @@ public class SysStudentScoreServiceImpl implements ISysStudentScoreService
         {
             warningTypes.add("排名下降");
             warningReasons.add(reason.toString());
+        }
+    }
+
+    /**
+     * 排名下降预警记录。
+     */
+    private void addRankDropWarningRecord(SysStudentScore score)
+    {
+        List<SysStudentScoreTrendVo> trendList = studentScoreMapper.selectStudentScoreTrendList(score.getStudentId());
+
+        if (trendList == null || trendList.size() < 2)
+        {
+            return;
+        }
+
+        int index = findTrendIndex(trendList, score.getScoreId());
+        if (index <= 0)
+        {
+            return;
+        }
+
+        SysStudentScoreTrendVo current = trendList.get(index);
+        SysStudentScoreTrendVo previous = trendList.get(index - 1);
+        StringBuilder reason = new StringBuilder();
+
+        String warningType = "";
+        String warningLevel = "";
+        String warningItem = "";
+        String warningReason = "";
+
+        if (isRankDropped(current.getClassRank(), previous.getClassRank()) && current.getClassRank() - previous.getClassRank() >= 5)
+        {
+            warningType = "rank_drop";
+            warningLevel = "2";
+            warningItem = "班级排名";
+            warningReason = String.valueOf(reason.append("班级排名从第").append(previous.getClassRank()).append("名下降到第")
+                .append(current.getClassRank()).append("名"));
+
+            if(current.getClassRank() - previous.getClassRank() >= 10) {
+                warningLevel = "3";
+            }
+
+            SysWarningRecord warningRecord = buildWarningRecord(score, warningType, warningLevel, warningItem, warningReason);
+            saveWarningIfAbsent(warningRecord);
+        }
+
+
+        if (isRankDropped(current.getGradeRank(), previous.getGradeRank()) && current.getGradeRank() - previous.getGradeRank() >= 5)
+        {
+            warningType = "rank_drop";
+            warningLevel = "2";
+            warningItem = "年级排名";
+            reason.setLength(0);
+            warningReason = String.valueOf(reason.append("年级排名从第").append(previous.getGradeRank()).append("名下降到第")
+                .append(current.getGradeRank()).append("名"));
+
+            if(current.getGradeRank() - previous.getGradeRank() >= 10) {
+                warningLevel = "3";
+            }
+
+            SysWarningRecord warningRecord = buildWarningRecord(score, warningType, warningLevel, warningItem, warningReason);
+            saveWarningIfAbsent(warningRecord);
         }
     }
 

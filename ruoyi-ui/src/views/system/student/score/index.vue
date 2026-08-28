@@ -395,7 +395,7 @@ function getList() {
   }).finally(() => {
     loading.value = false
   })
-}
+}  
 
 /** 加载学生下拉选项 */
 function loadStudentOptions() {

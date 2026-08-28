@@ -238,8 +238,8 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         inner join sys_class c on s.class_id = c.class_id
         left join sys_exam e on ss.exam_id = e.exam_id
         <where>
-            <if test="examName != null and examName != ''">
-                and coalesce(e.exam_name, ss.exam_name) like concat('%', #{examName}, '%')
+            <if test="examId != null">
+                and coalesce(e.exam_id, ss.exam_id) = #{examId}
             </if>
             <if test="classId != null">
                 and c.class_id = #{classId}
