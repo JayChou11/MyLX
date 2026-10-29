@@ -113,6 +113,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="remark != null">remark = #{remark},</if>
         </trim>
         where warning_id = #{warningId}
+        and warning_status = '0'
     </update>
 
     <delete id="deleteSysWarningRecordByWarningId" parameterType="Long">

@@ -1,6 +1,7 @@
 package com.ruoyi.system.service;
 
 import com.ruoyi.system.domain.SysWarningRecord;
+import com.ruoyi.system.domain.vo.SysWarningHandleRequestDto;
 
 import java.util.List;
 
@@ -39,10 +40,10 @@ public interface ISysWarningRecordService
     /**
      * 修改预警信息
      * 
-     * @param sysWarningRecord 预警信息
+     * @param sysWarningHandleRequestDto 预警信息
      * @return 结果
      */
-    public int updateSysWarningRecord(SysWarningRecord sysWarningRecord);
+    public int updateSysWarningRecord(SysWarningHandleRequestDto sysWarningHandleRequestDto);
 
     /**
      * 批量删除预警信息

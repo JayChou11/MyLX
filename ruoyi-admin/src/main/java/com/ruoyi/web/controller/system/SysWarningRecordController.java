@@ -7,10 +7,12 @@ import com.ruoyi.common.core.page.TableDataInfo;
 import com.ruoyi.common.enums.BusinessType;
 import com.ruoyi.common.utils.poi.ExcelUtil;
 import com.ruoyi.system.domain.SysWarningRecord;
+import com.ruoyi.system.domain.vo.SysWarningHandleRequestDto;
 import com.ruoyi.system.service.ISysWarningRecordService;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -69,9 +71,9 @@ public class SysWarningRecordController extends BaseController
     @PreAuthorize("@ss.hasPermi('system:warning-record:edit')")
     @Log(title = "预警信息", businessType = BusinessType.UPDATE)
     @PutMapping
-    public AjaxResult edit(@RequestBody SysWarningRecord sysWarningRecord)
+    public AjaxResult edit(@RequestBody @Validated SysWarningHandleRequestDto sysWarningHandleRequestDto)
     {
-        return toAjax(sysWarningRecordService.updateSysWarningRecord(sysWarningRecord));
+        return toAjax(sysWarningRecordService.updateSysWarningRecord(sysWarningHandleRequestDto));
     }
 
     /**

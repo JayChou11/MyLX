@@ -1,13 +1,17 @@
 package com.ruoyi.system.service.impl;
 
+import com.ruoyi.common.exception.ServiceException;
 import com.ruoyi.common.utils.DateUtils;
+import com.ruoyi.common.utils.SecurityUtils;
 import com.ruoyi.common.utils.StringUtils;
 import com.ruoyi.system.domain.SysWarningRecord;
+import com.ruoyi.system.domain.vo.SysWarningHandleRequestDto;
 import com.ruoyi.system.mapper.SysWarningRecordMapper;
 import com.ruoyi.system.service.ISysWarningRecordService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -55,18 +59,30 @@ public class SysWarningRecordServiceImpl implements ISysWarningRecordService
     /**
      * 修改预警信息
      * 
-     * @param sysWarningRecord 预警信息
+     * @param sysWarningHandleRequestDto 预警信息
      * @return 结果
      */
     @Override
-    public int updateSysWarningRecord(SysWarningRecord sysWarningRecord)
+    public int updateSysWarningRecord(SysWarningHandleRequestDto sysWarningHandleRequestDto)
     {
-        if (StringUtils.isNotEmpty(sysWarningRecord.getWarningStatus()) && !"0".equals(sysWarningRecord.getWarningStatus()))
-        {
-            sysWarningRecord.setHandleTime(DateUtils.getNowDate());
+        Long userId = SecurityUtils.getUserId();
+        String nickName = SecurityUtils.getLoginUser().getUser().getNickName();
+        Date now = DateUtils.getNowDate();
+
+        SysWarningRecord sysWarningRecord = new SysWarningRecord();
+        sysWarningRecord.setWarningId(sysWarningHandleRequestDto.getWarningId());
+        sysWarningRecord.setWarningStatus(sysWarningHandleRequestDto.getWarningStatus());
+        sysWarningRecord.setHandleResult(sysWarningHandleRequestDto.getHandleResult().trim());
+        sysWarningRecord.setHandleTime(now);
+        sysWarningRecord.setHandlerId(userId);
+        sysWarningRecord.setHandlerName(nickName);
+        sysWarningRecord.setUpdateTime(now);
+
+        int rows = sysWarningRecordMapper.updateSysWarningRecord(sysWarningRecord);
+        if (rows == 0) {
+            throw new ServiceException("预警不存在或已被处理，请刷新列表");
         }
-        sysWarningRecord.setUpdateTime(DateUtils.getNowDate());
-        return sysWarningRecordMapper.updateSysWarningRecord(sysWarningRecord);
+        return rows;
     }
 
     /**
